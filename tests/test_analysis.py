@@ -172,6 +172,34 @@ class TestPctChangeByParty:
         rep_idx = next(i for i, c in enumerate(cols) if c.startswith("REP"))
         assert dem_idx < rep_idx
 
+    def test_comparable_only_false_includes_non_comparable(self, analyzer):
+        # COUNTY CLERK has no REP in 2026 so it's excluded when comparable_only=True
+        result = analyzer.pct_change_by_party(
+            "2022 General Primary", "2026 General Primary", comparable_only=False
+        )
+        assert "FOR COUNTY CLERK" in result["contest"].values
+
+    def test_comparable_only_true_excludes_non_comparable(self, analyzer):
+        result = analyzer.pct_change_by_party(
+            "2022 General Primary", "2026 General Primary", comparable_only=True
+        )
+        assert "FOR COUNTY CLERK" not in result["contest"].values
+
+    def test_comparable_only_false_has_nan_for_missing_data(self, analyzer):
+        result = analyzer.pct_change_by_party(
+            "2022 General Primary", "2026 General Primary", comparable_only=False
+        )
+        row = result[result["contest"] == "FOR COUNTY CLERK"].iloc[0]
+        # REP has no 2026 data — that cell should be NaN
+        assert pd.isna(row["REP 2026 General Primary"])
+
+    def test_comparable_only_defaults_to_true(self, analyzer):
+        result_default = analyzer.pct_change_by_party("2022 General Primary", "2026 General Primary")
+        result_explicit = analyzer.pct_change_by_party(
+            "2022 General Primary", "2026 General Primary", comparable_only=True
+        )
+        assert list(result_default["contest"]) == list(result_explicit["contest"])
+
 
 # ---------------------------------------------------------------------------
 # party_share
@@ -237,6 +265,25 @@ class TestPartyShare:
     def test_excludes_legislation(self, analyzer):
         result = analyzer.party_share("2022 General Primary", "2026 General Primary")
         assert "REFERENDUM QUESTION 1" not in result["contest"].values
+
+    def test_comparable_only_false_includes_non_comparable(self, analyzer):
+        result = analyzer.party_share(
+            "2022 General Primary", "2026 General Primary", comparable_only=False
+        )
+        assert "FOR COUNTY CLERK" in result["contest"].values
+
+    def test_comparable_only_true_excludes_non_comparable(self, analyzer):
+        result = analyzer.party_share(
+            "2022 General Primary", "2026 General Primary", comparable_only=True
+        )
+        assert "FOR COUNTY CLERK" not in result["contest"].values
+
+    def test_comparable_only_defaults_to_true(self, analyzer):
+        result_default = analyzer.party_share("2022 General Primary", "2026 General Primary")
+        result_explicit = analyzer.party_share(
+            "2022 General Primary", "2026 General Primary", comparable_only=True
+        )
+        assert list(result_default["contest"]) == list(result_explicit["contest"])
 
 
 # ---------------------------------------------------------------------------

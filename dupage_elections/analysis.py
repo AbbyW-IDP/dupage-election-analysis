@@ -149,15 +149,20 @@ class ElectionAnalyzer:
         election_a: str | int | Election,
         election_b: str | int | Election,
         parties: tuple[str, ...] = ("DEM", "REP"),
+        comparable_only: bool = True,
     ) -> pd.DataFrame:
         """
-        For each comparable contest, show vote totals for each party in
-        both elections and the % change from election_a to election_b.
+        For each contest, show vote totals for each party in both elections
+        and the % change from election_a to election_b.
 
         Args:
-            election_a: The baseline election (name, id, or Election).
-            election_b: The comparison election (name, id, or Election).
-            parties:    Parties to include. Default: DEM and REP.
+            election_a:      The baseline election (name, id, or Election).
+            election_b:      The comparison election (name, id, or Election).
+            parties:         Parties to include. Default: DEM and REP.
+            comparable_only: If True (default), include only contests where
+                             both parties have votes in both elections.
+                             If False, include all contests present in either
+                             election, with NaN where data is missing.
 
         Returns:
             DataFrame with columns:
@@ -168,12 +173,16 @@ class ElectionAnalyzer:
         """
         a, b = _resolve_elections(self._db, [election_a, election_b])
         totals = self._get_party_totals([a.id, b.id], parties)
-        comparable = self._comparable_contests(totals, [a.id, b.id], parties)
 
-        if not comparable:
+        if comparable_only:
+            contests = self._comparable_contests(totals, [a.id, b.id], parties)
+        else:
+            contests = set(totals["contest_name"].unique())
+
+        if not contests:
             return pd.DataFrame(columns=["contest"])
 
-        df = totals[totals["contest_name"].isin(comparable)].copy()
+        df = totals[totals["contest_name"].isin(contests)].copy()
 
         pivot = df.pivot_table(
             index="contest_name",
@@ -209,17 +218,21 @@ class ElectionAnalyzer:
         self,
         *elections: str | int | Election,
         parties: tuple[str, ...] = ("DEM", "REP"),
+        comparable_only: bool = True,
     ) -> pd.DataFrame:
         """
-        For each comparable contest, show each party's share of total votes
-        cast in that contest per election.
+        For each contest, show each party's share of total votes cast in
+        that contest per election.
 
-        Accepts any number of elections (2+). Contests must have votes for
-        all parties in all elections to be included.
+        Accepts any number of elections (2+).
 
         Args:
-            *elections: Election names, ids, or Election objects.
-            parties:    Parties to include. Default: DEM and REP.
+            *elections:      Election names, ids, or Election objects.
+            parties:         Parties to include. Default: DEM and REP.
+            comparable_only: If True (default), include only contests where
+                             both parties have votes in all elections.
+                             If False, include all contests present in any
+                             election, with NaN where data is missing.
 
         Returns:
             DataFrame with columns:
@@ -234,9 +247,13 @@ class ElectionAnalyzer:
         election_ids = [e.id for e in resolved]
 
         totals = self._get_party_totals(election_ids, parties)
-        comparable = self._comparable_contests(totals, election_ids, parties)
 
-        if not comparable:
+        if comparable_only:
+            contests = self._comparable_contests(totals, election_ids, parties)
+        else:
+            contests = set(totals["contest_name"].unique())
+
+        if not contests:
             return pd.DataFrame(columns=["contest"])
 
         # All-party totals per contest per election for denominator
@@ -256,7 +273,7 @@ class ElectionAnalyzer:
             election_ids,
         )
 
-        df = totals[totals["contest_name"].isin(comparable)].copy()
+        df = totals[totals["contest_name"].isin(contests)].copy()
         df = df.merge(all_totals, on=["election_id", "election_name", "contest_name"])
         df["vote_share"] = df["party_total"] / df["contest_total"]
 

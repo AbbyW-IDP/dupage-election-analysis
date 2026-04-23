@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .db import ElectionDatabase, DEFAULT_DB_PATH
 from .loader import ElectionLoader, DEFAULT_SOURCES_DIR, DEFAULT_CONFIG_PATH, load_elections_config
+from .reports import load_reports_config, run_reports, DEFAULT_REPORTS_PATH
 from .flags import (
     export_flags,
     import_flags,
@@ -45,10 +46,8 @@ def setup_db() -> None:
     with ElectionDatabase(DEFAULT_DB_PATH) as db:
         loader = ElectionLoader(db)
 
-        configs = load_elections_config(DEFAULT_CONFIG_PATH)
-
         print(f"Loading {excel_path}...")
-        results = loader.load_excel(excel_path, configs)
+        results = loader.load_excel(excel_path)
         for name, (election, new_names) in results.items():
             print(f"  {name}: loaded")
             if new_names:
@@ -109,17 +108,46 @@ DEFAULT_OUTPUT = Path("election_analysis.xlsx")
 
 
 def generate_analysis() -> None:
-    """Write election_analysis.xlsx from the current database."""
-    import pandas as pd
+    """
+    Run reports defined in reports.toml (or a custom path passed as the first
+    argument) and write the results to Excel.
+
+    Usage:
+        uv run generate-analysis                   # uses reports.toml
+        uv run generate-analysis my_reports.toml   # custom config
+
+    If no reports.toml is found, falls back to a default run: turnout for all
+    elections, pct_change_by_party and party_share for the two most recent.
+    """
     from .analysis import ElectionAnalyzer
 
-    output_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUTPUT
+    reports_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_REPORTS_PATH
 
     with ElectionDatabase(DEFAULT_DB_PATH) as db:
+        # Config-driven path
+        if reports_path.exists():
+            try:
+                reports = load_reports_config(reports_path)
+            except ValueError as e:
+                print(f"Error in {reports_path}: {e}")
+                sys.exit(1)
+
+            if not reports:
+                print(f"No reports defined in {reports_path}.")
+                return
+
+            written = run_reports(reports, db)
+            print(f"\nDone. Wrote {len(written)} file(s):")
+            for p in written:
+                print(f"  {p}")
+            return
+
+        # Fallback: default hardcoded run (no reports.toml present)
+        print(f"No reports config found at {reports_path}. Running default analysis...")
         analyzer = ElectionAnalyzer(db)
 
-        print("Elections in database:")
         elections = analyzer.list_elections()
+        print("Elections in database:")
         print(elections[["id", "name", "year", "election_date"]].to_string(index=False))
         print()
 
@@ -127,15 +155,15 @@ def generate_analysis() -> None:
             print("Need at least 2 elections loaded to run comparisons.")
             return
 
+        import pandas as pd
         names = elections["name"].tolist()
         recent_a, recent_b = names[-2], names[-1]
+        output_path = DEFAULT_OUTPUT
 
         print(f"Running pct_change_by_party: {recent_a!r} vs {recent_b!r}")
         pct_change = analyzer.pct_change_by_party(recent_a, recent_b)
-
         print("Running party_share across all elections")
         share = analyzer.party_share(*names)
-
         print("Running turnout across all elections")
         turnout = analyzer.turnout()
 
