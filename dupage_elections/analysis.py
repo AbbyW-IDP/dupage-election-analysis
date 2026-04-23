@@ -237,8 +237,11 @@ class ElectionAnalyzer:
         Returns:
             DataFrame with columns:
                 contest,
-                <party> share <election.name>,  (as a fraction, e.g. 0.52)
-                ... (repeated per party per election)
+                <party> share <election.name>,  (fraction, e.g. 0.52)
+                ... (one column per election, per party)
+                <party> pp change  (last minus first election, in percentage
+                                    points as a fraction, e.g. 0.20 = +20 pp)
+                ... (one pp change column per party)
         """
         if len(elections) < 2:
             raise ValueError("party_share requires at least 2 elections.")
@@ -285,13 +288,24 @@ class ElectionAnalyzer:
         pivot.columns = [f"{party} share {name}" for party, name in pivot.columns]
         pivot = pivot.reset_index()
 
-        # Order: contest, then per-party block per election
+        # Add a percentage-point change column per party (last minus first election)
+        first, last = resolved[0], resolved[-1]
+        for party in parties:
+            col_first = f"{party} share {first.name}"
+            col_last  = f"{party} share {last.name}"
+            if col_first in pivot.columns and col_last in pivot.columns:
+                pivot[f"{party} pp change"] = pivot[col_last] - pivot[col_first]
+
+        # Order: contest, then per-party block [each election share..., pp change]
         ordered = ["contest_name"]
         for party in parties:
             for e in resolved:
                 col = f"{party} share {e.name}"
                 if col in pivot.columns:
                     ordered.append(col)
+            pp_col = f"{party} pp change"
+            if pp_col in pivot.columns:
+                ordered.append(pp_col)
 
         return pivot[ordered].rename(columns={"contest_name": "contest"})
 

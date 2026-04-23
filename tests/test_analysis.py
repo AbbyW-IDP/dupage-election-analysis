@@ -285,6 +285,64 @@ class TestPartyShare:
         )
         assert list(result_default["contest"]) == list(result_explicit["contest"])
 
+    def test_has_pp_change_columns(self, analyzer):
+        result = analyzer.party_share("2022 General Primary", "2026 General Primary")
+        assert "DEM pp change" in result.columns
+        assert "REP pp change" in result.columns
+
+    def test_pp_change_calculation(self, db):
+        # DEM: 40% in 2022, 60% in 2026 → +0.20
+        seed_election(db, "2022 General Primary", 2022, [
+            {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM", "total_votes": 4000},
+            {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "REP", "total_votes": 6000},
+        ])
+        seed_election(db, "2026 General Primary", 2026, [
+            {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM", "total_votes": 6000},
+            {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "REP", "total_votes": 4000},
+        ])
+        analyzer = ElectionAnalyzer(db)
+        result = analyzer.party_share("2022 General Primary", "2026 General Primary")
+        row = result[result["contest"] == "FOR SENATOR"].iloc[0]
+        assert abs(row["DEM pp change"] - 0.20) < 1e-6
+        assert abs(row["REP pp change"] - (-0.20)) < 1e-6
+
+    def test_pp_change_is_last_minus_first(self, db):
+        # With four elections, pp change should be 2026 minus 2014, not 2026 minus 2022
+        for year, dem, rep in [(2014, 3000, 7000), (2018, 4000, 6000),
+                               (2022, 5000, 5000), (2026, 6000, 4000)]:
+            seed_election(db, f"{year} General Primary", year, [
+                {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM", "total_votes": dem},
+                {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "REP", "total_votes": rep},
+            ])
+        analyzer = ElectionAnalyzer(db)
+        result = analyzer.party_share(
+            "2014 General Primary", "2018 General Primary",
+            "2022 General Primary", "2026 General Primary",
+        )
+        row = result[result["contest"] == "FOR SENATOR"].iloc[0]
+        # DEM: 0.30 in 2014, 0.60 in 2026 → +0.30
+        assert abs(row["DEM pp change"] - 0.30) < 1e-6
+
+    def test_pp_change_column_order(self, analyzer):
+        # pp change should appear after all share columns for that party,
+        # before the next party's columns
+        result = analyzer.party_share("2022 General Primary", "2026 General Primary")
+        cols = list(result.columns)
+        dem_share_last = max(i for i, c in enumerate(cols) if c.startswith("DEM share"))
+        dem_pp         = next(i for i, c in enumerate(cols) if c == "DEM pp change")
+        rep_share_first = next(i for i, c in enumerate(cols) if c.startswith("REP share"))
+        assert dem_share_last < dem_pp < rep_share_first
+
+    def test_pp_change_with_nan_when_not_comparable(self, analyzer):
+        # comparable_only=False: contests missing a party in one election
+        # should have NaN pp change for that party
+        result = analyzer.party_share(
+            "2022 General Primary", "2026 General Primary", comparable_only=False
+        )
+        row = result[result["contest"] == "FOR COUNTY CLERK"].iloc[0]
+        # REP missing in 2026 → pp change is NaN
+        assert pd.isna(row["REP pp change"])
+
 
 # ---------------------------------------------------------------------------
 # turnout
