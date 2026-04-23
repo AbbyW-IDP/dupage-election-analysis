@@ -9,8 +9,8 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from election_analysis.db import ElectionDatabase
-from election_analysis.models import Election
+from src.election_analysis_generator.db import ElectionDatabase
+from src.election_analysis_generator.models import Election
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ def seed_election(
     Insert an Election with candidate rows directly into the database.
     Contest names are pre-registered so they aren't flagged as unknown.
     """
-    from election_analysis.normalize import normalize_contest_name
+    from src.election_analysis_generator.normalize import normalize_contest_name
 
     df = make_candidates_df(rows)
 

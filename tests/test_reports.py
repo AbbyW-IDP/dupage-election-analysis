@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from election_analysis.reports import (
+from src.election_analysis_generator.reports import (
     AnalysisEntry,
     ReportConfig,
     load_reports_config,

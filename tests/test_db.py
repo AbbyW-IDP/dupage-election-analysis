@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from election_analysis.db import ElectionDatabase, DEFAULT_DB_PATH
-from election_analysis.models import Election
+from src.election_analysis_generator.db import ElectionDatabase, DEFAULT_DB_PATH
+from src.election_analysis_generator.models import Election
 from tests.conftest import make_candidates_df, seed_election
 
 

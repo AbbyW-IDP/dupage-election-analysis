@@ -7,8 +7,8 @@ from datetime import date
 import pytest
 import pandas as pd
 
-from election_analysis.analysis import ElectionAnalyzer
-from election_analysis.models import Election
+from src.election_analysis_generator.analysis import ElectionAnalyzer
+from src.election_analysis_generator.models import Election
 from tests.conftest import seed_election
 
 

@@ -3,7 +3,7 @@ Tests for election_analysis.normalize
 """
 
 import pytest
-from election_analysis.normalize import normalize_contest_name, normalize_party
+from src.election_analysis_generator.normalize import normalize_contest_name, normalize_party
 
 
 class TestNormalizeContestName:
