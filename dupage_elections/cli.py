@@ -20,7 +20,12 @@ import sys
 from pathlib import Path
 
 from .db import ElectionDatabase, DEFAULT_DB_PATH
-from .loader import ElectionLoader, DEFAULT_SOURCES_DIR, DEFAULT_CONFIG_PATH, load_elections_config
+from .loader import (
+    ElectionLoader,
+    DEFAULT_SOURCES_DIR,
+    DEFAULT_CONFIG_PATH,
+    load_elections_config,
+)
 from .reports import load_reports_config, run_reports, DEFAULT_REPORTS_PATH
 from .flags import (
     export_flags,
@@ -70,6 +75,7 @@ def setup_db() -> None:
 # ---------------------------------------------------------------------------
 # sync-sources
 # ---------------------------------------------------------------------------
+
 
 def sync_sources() -> None:
     """Load any elections defined in elections.toml whose CSV hasn't been loaded yet."""
@@ -156,6 +162,7 @@ def generate_analysis() -> None:
             return
 
         import pandas as pd
+
         names = elections["name"].tolist()
         recent_a, recent_b = names[-2], names[-1]
         output_path = DEFAULT_OUTPUT
@@ -180,6 +187,7 @@ def generate_analysis() -> None:
 # export-flags
 # ---------------------------------------------------------------------------
 
+
 def export_flags_cmd() -> None:
     """Write unresolved flags to flags_review.xlsx for spreadsheet review."""
     output_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_EXPORT_PATH
@@ -196,13 +204,16 @@ def export_flags_cmd() -> None:
     print("Next steps:")
     print("  1. Open the workbook and review the 'flags' tab")
     print("  2. Set Status to: accepted, mapped, or ignored")
-    print("     For 'mapped', fill in 'Override Target' with a name from 'known_contests'")
+    print(
+        "     For 'mapped', fill in 'Override Target' with a name from 'known_contests'"
+    )
     print("  3. Run: import-flags")
 
 
 # ---------------------------------------------------------------------------
 # import-flags
 # ---------------------------------------------------------------------------
+
 
 def import_flags_cmd() -> None:
     """Apply a reviewed flags_review.xlsx to the database."""
@@ -228,12 +239,15 @@ def import_flags_cmd() -> None:
 
     remaining = counts["skipped"] + counts["errors"]
     if remaining:
-        print(f"\n{remaining} flag(s) still unresolved. Re-export and review to continue.")
+        print(
+            f"\n{remaining} flag(s) still unresolved. Re-export and review to continue."
+        )
 
 
 # ---------------------------------------------------------------------------
 # review-flags
 # ---------------------------------------------------------------------------
+
 
 def review_flags_cmd() -> None:
     """Interactively resolve flagged contest names in the terminal."""

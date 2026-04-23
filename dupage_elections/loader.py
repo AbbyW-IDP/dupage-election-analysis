@@ -33,10 +33,12 @@ def _normalize_csv_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize CSV column names to internal conventions."""
     df = df.copy()
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
-    return df.rename(columns={
-        "contest_name": "contest_name_raw",
-        "party_name":   "party",
-    })
+    return df.rename(
+        columns={
+            "contest_name": "contest_name_raw",
+            "party_name": "party",
+        }
+    )
 
 
 def _normalize_excel_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -46,18 +48,20 @@ def _normalize_excel_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     df["contest_name_raw"] = df["contestMixed"]
-    return df.rename(columns={
-        "line number":        "line_number",
-        "choice name":        "choice_name",
-        "total votes":        "total_votes",
-        "percent of votes":   "percent_of_votes",
-        "registered voters":  "registered_voters",
-        "ballots cast":       "ballots_cast",
-        "num precinct total": "num_precinct_total",
-        "num precinct rptg":  "num_precinct_rptg",
-        "over votes":         "over_votes",
-        "under votes":        "under_votes",
-    })
+    return df.rename(
+        columns={
+            "line number": "line_number",
+            "choice name": "choice_name",
+            "total votes": "total_votes",
+            "percent of votes": "percent_of_votes",
+            "registered voters": "registered_voters",
+            "ballots cast": "ballots_cast",
+            "num precinct total": "num_precinct_total",
+            "num precinct rptg": "num_precinct_rptg",
+            "over votes": "over_votes",
+            "under votes": "under_votes",
+        }
+    )
 
 
 def _year_from_filename(filename: str) -> int | None:
@@ -67,10 +71,10 @@ def _year_from_filename(filename: str) -> int | None:
     2022-general-primary-2022-07-19.csv), then falls back to first 20xx match.
     """
     stem = Path(filename).stem
-    match = re.match(r'(20\d{2})', stem)
+    match = re.match(r"(20\d{2})", stem)
     if match:
         return int(match.group(1))
-    match = re.search(r'(20\d{2})', stem)
+    match = re.search(r"(20\d{2})", stem)
     return int(match.group(1)) if match else None
 
 
@@ -198,14 +202,20 @@ class ElectionLoader:
 
         year = config.get("year") or _year_from_filename(path.name)
         if year is None:
-            raise ValueError(f"Could not determine year for {path.name}. Add 'year' to elections.toml.")
+            raise ValueError(
+                f"Could not determine year for {path.name}. Add 'year' to elections.toml."
+            )
 
         election = Election(
             id=None,
             name=config["name"],
             year=year,
-            election_date=date.fromisoformat(config["election_date"]) if config.get("election_date") else None,
-            results_last_updated=date.fromisoformat(config["results_last_updated"]) if config.get("results_last_updated") else None,
+            election_date=date.fromisoformat(config["election_date"])
+            if config.get("election_date")
+            else None,
+            results_last_updated=date.fromisoformat(config["results_last_updated"])
+            if config.get("results_last_updated")
+            else None,
             source_file=path.name,
             category=config.get("category", ""),
             election_type=config.get("election_type", ""),
@@ -256,8 +266,12 @@ class ElectionLoader:
                 id=None,
                 name=name,
                 year=year,
-                election_date=date.fromisoformat(entry["election_date"]) if entry.get("election_date") else None,
-                results_last_updated=date.fromisoformat(entry["results_last_updated"]) if entry.get("results_last_updated") else None,
+                election_date=date.fromisoformat(entry["election_date"])
+                if entry.get("election_date")
+                else None,
+                results_last_updated=date.fromisoformat(entry["results_last_updated"])
+                if entry.get("results_last_updated")
+                else None,
                 source_file=source_key,
                 category=entry.get("category", ""),
                 election_type=entry.get("election_type", ""),

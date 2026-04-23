@@ -152,7 +152,9 @@ class ElectionDatabase:
                 election.name,
                 election.year,
                 election.election_date.isoformat() if election.election_date else None,
-                election.results_last_updated.isoformat() if election.results_last_updated else None,
+                election.results_last_updated.isoformat()
+                if election.results_last_updated
+                else None,
                 election.source_file,
                 election.category,
                 election.election_type,
@@ -216,7 +218,10 @@ class ElectionDatabase:
                 (
                     contest_id,
                     election_id,
-                    int(row["line_number"]) if row.get("line_number") is not None and not pd.isna(row.get("line_number")) else None,
+                    int(row["line_number"])
+                    if row.get("line_number") is not None
+                    and not pd.isna(row.get("line_number"))
+                    else None,
                     row["contest_name_raw"],
                     row.get("choice_name"),
                     row.get("party"),
@@ -249,7 +254,9 @@ class ElectionDatabase:
             (contest_name, is_legislation),
         )
 
-    def set_contest_legislation_flag(self, contest_name: str, is_legislation: bool) -> None:
+    def set_contest_legislation_flag(
+        self, contest_name: str, is_legislation: bool
+    ) -> None:
         """Manually override the is_legislation flag for a contest."""
         self._conn.execute(
             "UPDATE contests SET is_legislation = ? WHERE contest_name = ?",
@@ -283,8 +290,12 @@ class ElectionDatabase:
             id=row["id"],
             name=row["name"],
             year=row["year"],
-            election_date=date.fromisoformat(row["election_date"]) if row["election_date"] else None,
-            results_last_updated=date.fromisoformat(row["results_last_updated"]) if row["results_last_updated"] else None,
+            election_date=date.fromisoformat(row["election_date"])
+            if row["election_date"]
+            else None,
+            results_last_updated=date.fromisoformat(row["results_last_updated"])
+            if row["results_last_updated"]
+            else None,
             source_file=row["source_file"],
             category=row["category"],
             election_type=row["election_type"],
@@ -340,7 +351,9 @@ class ElectionDatabase:
         ).fetchall()
         return {r[0]: r[1] for r in rows}
 
-    def add_override(self, raw_name: str, canonical_name: str, note: str | None = None) -> None:
+    def add_override(
+        self, raw_name: str, canonical_name: str, note: str | None = None
+    ) -> None:
         self._conn.execute(
             "INSERT OR REPLACE INTO contest_name_overrides (contest_name_raw, contest_name, note) VALUES (?,?,?)",
             (raw_name, canonical_name, note),
@@ -369,7 +382,9 @@ class ElectionDatabase:
     def _write_flags(self, df: pd.DataFrame, year: int) -> None:
         flag_df = df[["contest_name_raw", "contest_name"]].drop_duplicates().copy()
         flag_df["year"] = year
-        flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(index=False)
+        flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(
+            index=False
+        )
         self._conn.executemany(
             "INSERT INTO contest_name_flags (year, contest_name_raw, contest_name) VALUES (?,?,?)",
             flag_rows,

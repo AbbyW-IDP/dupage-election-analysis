@@ -69,9 +69,11 @@ DEFAULT_REPORTS_PATH = Path("reports.toml")
 # Config dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AnalysisEntry:
     """One sheet in a report."""
+
     analysis: str
     sheet: str
     elections: list[str] = field(default_factory=list)
@@ -81,6 +83,7 @@ class AnalysisEntry:
 @dataclass
 class ReportConfig:
     """One report → one Excel file."""
+
     key: str
     output: Path
     analyses: list[AnalysisEntry]
@@ -89,6 +92,7 @@ class ReportConfig:
 # ---------------------------------------------------------------------------
 # Config loading
 # ---------------------------------------------------------------------------
+
 
 def load_reports_config(path: Path = DEFAULT_REPORTS_PATH) -> list[ReportConfig]:
     """
@@ -115,12 +119,14 @@ def load_reports_config(path: Path = DEFAULT_REPORTS_PATH) -> list[ReportConfig]
                     f"[reports.{key}] Unknown analysis {name!r}. "
                     f"Known analyses: {known}"
                 )
-            analyses.append(AnalysisEntry(
-                analysis=name,
-                sheet=entry["sheet"],
-                elections=entry.get("elections", []),
-                comparable_only=entry.get("comparable_only", True),
-            ))
+            analyses.append(
+                AnalysisEntry(
+                    analysis=name,
+                    sheet=entry["sheet"],
+                    elections=entry.get("elections", []),
+                    comparable_only=entry.get("comparable_only", True),
+                )
+            )
         reports.append(ReportConfig(key=key, output=output, analyses=analyses))
 
     return reports
@@ -129,6 +135,7 @@ def load_reports_config(path: Path = DEFAULT_REPORTS_PATH) -> list[ReportConfig]
 # ---------------------------------------------------------------------------
 # Report runner
 # ---------------------------------------------------------------------------
+
 
 def run_reports(
     reports: list[ReportConfig],
@@ -158,7 +165,9 @@ def run_reports(
             for entry in report.analyses:
                 fn = ANALYSIS_REGISTRY[entry.analysis]
                 comparable_label = "" if entry.comparable_only else ", all contests"
-                print(f"  {entry.analysis}({', '.join(entry.elections) or 'all'}{comparable_label}) → sheet {entry.sheet!r}")
+                print(
+                    f"  {entry.analysis}({', '.join(entry.elections) or 'all'}{comparable_label}) → sheet {entry.sheet!r}"
+                )
                 try:
                     df = fn(analyzer, entry.elections, entry.comparable_only)
                 except ValueError as e:
@@ -185,16 +194,23 @@ def run_reports(
 #   2. Add a wrapper function below
 #   3. Add one line to ANALYSIS_REGISTRY
 
+
 def _run_pct_change_by_party(
-    analyzer: ElectionAnalyzer, elections: list[str], comparable_only: bool = True,
+    analyzer: ElectionAnalyzer,
+    elections: list[str],
+    comparable_only: bool = True,
 ) -> pd.DataFrame:
     if len(elections) != 2:
         raise ValueError("pct_change_by_party requires exactly 2 elections.")
-    return analyzer.pct_change_by_party(elections[0], elections[1], comparable_only=comparable_only)
+    return analyzer.pct_change_by_party(
+        elections[0], elections[1], comparable_only=comparable_only
+    )
 
 
 def _run_party_share(
-    analyzer: ElectionAnalyzer, elections: list[str], comparable_only: bool = True,
+    analyzer: ElectionAnalyzer,
+    elections: list[str],
+    comparable_only: bool = True,
 ) -> pd.DataFrame:
     if len(elections) < 2:
         raise ValueError("party_share requires at least 2 elections.")
@@ -202,20 +218,26 @@ def _run_party_share(
 
 
 def _run_turnout(
-    analyzer: ElectionAnalyzer, elections: list[str], comparable_only: bool = True,
+    analyzer: ElectionAnalyzer,
+    elections: list[str],
+    comparable_only: bool = True,
 ) -> pd.DataFrame:
     return analyzer.turnout(*elections)  # comparable_only is not applicable to turnout
 
 
 def _run_aggregated_csv(
-    analyzer: ElectionAnalyzer, elections: list[str], comparable_only: bool = True,
+    analyzer: ElectionAnalyzer,
+    elections: list[str],
+    comparable_only: bool = True,
 ) -> pd.DataFrame:
     return analyzer.aggregated_csv(*elections)  # comparable_only not applicable
 
 
-ANALYSIS_REGISTRY: dict[str, Callable[[ElectionAnalyzer, list[str], bool], pd.DataFrame]] = {
+ANALYSIS_REGISTRY: dict[
+    str, Callable[[ElectionAnalyzer, list[str], bool], pd.DataFrame]
+] = {
     "pct_change_by_party": _run_pct_change_by_party,
-    "party_share":         _run_party_share,
-    "turnout":             _run_turnout,
-    "aggregated_csv":      _run_aggregated_csv,
+    "party_share": _run_party_share,
+    "turnout": _run_turnout,
+    "aggregated_csv": _run_aggregated_csv,
 }
