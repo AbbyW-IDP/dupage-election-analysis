@@ -384,3 +384,78 @@ class TestTurnout:
     def test_index_name_is_metric(self, analyzer):
         result = analyzer.turnout()
         assert result.index.name == "Metric"
+
+# ---------------------------------------------------------------------------
+# aggregated_csv
+# ---------------------------------------------------------------------------
+
+class TestAggregatedCsv:
+
+    EXPECTED_COLUMNS = [
+        "line number", "contest name", "choice name", "party",
+        "total votes", "percent of votes",
+        "num precinct total", "num precinct rptg", "over votes", "under votes",
+        "year", "category", "contest name (normalized)",
+    ]
+
+    def test_returns_dataframe(self, analyzer):
+        result = analyzer.aggregated_csv()
+        assert isinstance(result, pd.DataFrame)
+
+    def test_has_all_expected_columns(self, analyzer):
+        result = analyzer.aggregated_csv()
+        for col in self.EXPECTED_COLUMNS:
+            assert col in result.columns, f"Missing column: {col!r}"
+
+    def test_column_order(self, analyzer):
+        result = analyzer.aggregated_csv()
+        assert list(result.columns) == self.EXPECTED_COLUMNS
+
+    def test_one_row_per_candidate(self, analyzer):
+        # db_with_two_elections fixture has 5 + 3 = 8 candidate rows
+        result = analyzer.aggregated_csv()
+        assert len(result) == 8
+
+    def test_filters_to_specified_elections(self, analyzer):
+        result = analyzer.aggregated_csv("2022 General Primary")
+        assert set(result["year"].unique()) == {2022}
+
+    def test_includes_all_elections_when_none_specified(self, analyzer):
+        result = analyzer.aggregated_csv()
+        assert set(result["year"].unique()) == {2022, 2026}
+
+    def test_normalized_contest_name_differs_from_raw(self, db):
+        # Raw has "(Vote For 1)" suffix; normalized strips it
+        seed_election(db, "2022 General Primary", 2022, [
+            {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM", "total_votes": 5000},
+        ])
+        analyzer = ElectionAnalyzer(db)
+        result = analyzer.aggregated_csv()
+        row = result.iloc[0]
+        assert row["contest name"] == "FOR SENATOR (Vote For 1)"
+        assert row["contest name (normalized)"] == "FOR SENATOR"
+
+    def test_year_column_populated(self, analyzer):
+        result = analyzer.aggregated_csv("2022 General Primary")
+        assert (result["year"] == 2022).all()
+
+    def test_category_column_populated(self, analyzer):
+        result = analyzer.aggregated_csv("2022 General Primary")
+        assert (result["category"] == "General Primary").all()
+
+    def test_includes_legislation_contests(self, analyzer):
+        # aggregated_csv is a raw export — legislation is not filtered out
+        result = analyzer.aggregated_csv("2022 General Primary")
+        assert "Referendum Question 1 (Vote For 1)" in result["contest name"].values
+
+    def test_empty_dataframe_when_no_elections_in_db(self, db):
+        analyzer = ElectionAnalyzer(db)
+        result = analyzer.aggregated_csv()
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+
+    def test_accepts_election_objects(self, db_with_two_elections):
+        analyzer = ElectionAnalyzer(db_with_two_elections)
+        election = db_with_two_elections.get_election_by_name("2022 General Primary")
+        result = analyzer.aggregated_csv(election)
+        assert set(result["year"].unique()) == {2022}

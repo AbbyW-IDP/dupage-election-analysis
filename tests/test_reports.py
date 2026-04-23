@@ -340,7 +340,31 @@ class TestAnalysisRegistry:
         assert "pct_change_by_party" in ANALYSIS_REGISTRY
         assert "party_share" in ANALYSIS_REGISTRY
         assert "turnout" in ANALYSIS_REGISTRY
+        assert "aggregated_csv" in ANALYSIS_REGISTRY
 
     def test_all_values_are_callable(self):
         for name, fn in ANALYSIS_REGISTRY.items():
             assert callable(fn), f"{name} is not callable"
+
+    def test_aggregated_csv_sheet_written(self, db_with_elections, tmp_path):
+        reports = [ReportConfig(
+            key="test",
+            output=Path("out.xlsx"),
+            analyses=[AnalysisEntry("aggregated_csv", "raw data", [])],
+        )]
+        run_reports(reports, db_with_elections, base_dir=tmp_path)
+        xl = pd.ExcelFile(tmp_path / "out.xlsx")
+        assert "raw data" in xl.sheet_names
+
+    def test_aggregated_csv_with_elections_filter(self, db_with_elections, tmp_path):
+        reports = [ReportConfig(
+            key="test",
+            output=Path("out.xlsx"),
+            analyses=[AnalysisEntry(
+                "aggregated_csv", "raw data",
+                ["2022 General Primary"],
+            )],
+        )]
+        run_reports(reports, db_with_elections, base_dir=tmp_path)
+        df = pd.read_excel(tmp_path / "out.xlsx", sheet_name="raw data")
+        assert set(df["year"].unique()) == {2022}

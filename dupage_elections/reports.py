@@ -41,6 +41,7 @@ Supported analysis names
 - ``pct_change_by_party``   requires exactly 2 elections
 - ``party_share``           requires 2+ elections
 - ``turnout``               elections optional (defaults to all)
+- ``aggregated_csv``        elections optional (defaults to all)
 
 Adding future analyses
 ----------------------
@@ -181,7 +182,8 @@ def run_reports(
 #
 # To add a new analysis:
 #   1. Add a method to ElectionAnalyzer in analysis.py
-#   2. Add one line here
+#   2. Add a wrapper function below
+#   3. Add one line to ANALYSIS_REGISTRY
 
 def _run_pct_change_by_party(
     analyzer: ElectionAnalyzer, elections: list[str], comparable_only: bool = True,
@@ -205,8 +207,15 @@ def _run_turnout(
     return analyzer.turnout(*elections)  # comparable_only is not applicable to turnout
 
 
+def _run_aggregated_csv(
+    analyzer: ElectionAnalyzer, elections: list[str], comparable_only: bool = True,
+) -> pd.DataFrame:
+    return analyzer.aggregated_csv(*elections)  # comparable_only not applicable
+
+
 ANALYSIS_REGISTRY: dict[str, Callable[[ElectionAnalyzer, list[str], bool], pd.DataFrame]] = {
     "pct_change_by_party": _run_pct_change_by_party,
     "party_share":         _run_party_share,
     "turnout":             _run_turnout,
+    "aggregated_csv":      _run_aggregated_csv,
 }

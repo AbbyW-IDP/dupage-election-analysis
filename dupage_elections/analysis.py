@@ -342,3 +342,67 @@ class ElectionAnalyzer:
         result = pd.DataFrame(rows).T
         result.index.name = "Metric"
         return result
+
+    # ------------------------------------------------------------------
+    # Analysis: aggregated CSV
+    # ------------------------------------------------------------------
+
+    def aggregated_csv(self, *elections: str | int | Election) -> pd.DataFrame:
+        """
+        Return a flat table of every candidate row across the specified
+        elections (or all elections if none given), combining the original
+        source columns with election-level metadata.
+
+        This is a raw data export — no filtering, pivoting, or comparable-
+        contest logic is applied.
+
+        Args:
+            *elections: Election names, ids, or Election objects.
+                        If omitted, all elections in the database are included.
+
+        Returns:
+            DataFrame with one row per candidate, columns:
+
+            Original source columns (using original CSV header names):
+                line number, contest name, choice name, party,
+                total votes, percent of votes,
+                num precinct total, num precinct rptg, over votes, under votes
+
+            Added columns:
+                year, category, contest name (normalized)
+        """
+        if elections:
+            resolved = _resolve_elections(self._db, list(elections))
+            election_ids = [e.id for e in resolved]
+        else:
+            election_ids = [e.id for e in self._db.get_all_elections()]
+
+        if not election_ids:
+            return pd.DataFrame()
+
+        id_placeholders = ",".join("?" * len(election_ids))
+        df = self._db.query(
+            f"""
+            SELECT
+                ca.line_number          AS "line number",
+                ca.contest_name_raw     AS "contest name",
+                ca.choice_name          AS "choice name",
+                ca.party                AS "party",
+                ca.total_votes          AS "total votes",
+                ca.percent_of_votes     AS "percent of votes",
+                ca.num_precinct_total   AS "num precinct total",
+                ca.num_precinct_rptg    AS "num precinct rptg",
+                ca.over_votes           AS "over votes",
+                ca.under_votes          AS "under votes",
+                e.year                  AS "year",
+                e.category              AS "category",
+                co.contest_name         AS "contest name (normalized)"
+            FROM candidates ca
+            JOIN elections e  ON ca.election_id = e.id
+            JOIN contests  co ON ca.contest_id  = co.id
+            WHERE e.id IN ({id_placeholders})
+            ORDER BY e.year, co.contest_name, ca.party, ca.choice_name
+            """,
+            election_ids,
+        )
+        return df

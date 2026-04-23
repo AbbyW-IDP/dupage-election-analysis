@@ -229,6 +229,42 @@ class TestLoaderLoadCsv:
         election, _ = loader.load_csv(path, config)
         assert election.election_date == date(2026, 3, 17)
 
+    def test_results_last_updated_from_config(self, db, tmp_path):
+        path = write_csv(tmp_path, [
+            "1,FOR SENATOR (Vote For 1),Jane Smith,D,5000,100.0,50000,10000,10,10,0,0",
+        ])
+        config = {
+            "name": "2026 General Primary",
+            "source_file": path.name,
+            "results_last_updated": "2026-04-21",
+        }
+        loader = ElectionLoader(db)
+        election, _ = loader.load_csv(path, config)
+        assert election.results_last_updated == date(2026, 4, 21)
+
+    def test_results_last_updated_is_none_when_absent(self, db, tmp_path):
+        path = write_csv(tmp_path, [
+            "1,FOR SENATOR (Vote For 1),Jane Smith,D,5000,100.0,50000,10000,10,10,0,0",
+        ])
+        config = {"name": "2026 General Primary", "source_file": path.name}
+        loader = ElectionLoader(db)
+        election, _ = loader.load_csv(path, config)
+        assert election.results_last_updated is None
+
+    def test_results_last_updated_roundtrips_through_db(self, db, tmp_path):
+        path = write_csv(tmp_path, [
+            "1,FOR SENATOR (Vote For 1),Jane Smith,D,5000,100.0,50000,10000,10,10,0,0",
+        ])
+        config = {
+            "name": "2026 General Primary",
+            "source_file": path.name,
+            "results_last_updated": "2026-04-21",
+        }
+        loader = ElectionLoader(db)
+        loader.load_csv(path, config)
+        retrieved = db.get_election_by_name("2026 General Primary")
+        assert retrieved.results_last_updated == date(2026, 4, 21)
+
 
 # ---------------------------------------------------------------------------
 # ElectionLoader.sync
