@@ -9,11 +9,14 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.election_analysis_generator.loader import (
+from election_analysis.loader import (
     ElectionLoader,
     _normalize_csv_columns,
+    _validate_csv_columns,
     _year_from_filename,
     load_elections_config,
+    REQUIRED_CSV_COLUMNS,
+    OPTIONAL_CSV_COLUMNS,
 )
 from tests.conftest import seed_election
 
@@ -142,6 +145,104 @@ class TestLoadElectionsConfig:
 
 
 # ---------------------------------------------------------------------------
+# _validate_csv_columns
+# ---------------------------------------------------------------------------
+
+
+class TestValidateCsvColumns:
+    def _df(self, **cols):
+        """Build a minimal DataFrame with the given columns."""
+        import pandas as pd
+
+        base = {
+            "contest_name_raw": ["FOR SENATOR"],
+            "party": ["DEM"],
+            "total_votes": [5000.0],
+        }
+        base.update({k: [v] for k, v in cols.items()})
+        return pd.DataFrame(base)
+
+    def test_passes_when_all_required_present(self, tmp_path):
+        import pandas as pd
+
+        df = self._df()
+        result = _validate_csv_columns(df, tmp_path / "test.csv")
+        assert isinstance(result, pd.DataFrame)
+
+    def test_raises_when_contest_name_missing(self, tmp_path):
+        import pandas as pd
+
+        df = pd.DataFrame({"party": ["DEM"], "total_votes": [5000.0]})
+        with pytest.raises(ValueError, match="contest name"):
+            _validate_csv_columns(df, tmp_path / "test.csv")
+
+    def test_raises_when_party_missing(self, tmp_path):
+        import pandas as pd
+
+        df = pd.DataFrame(
+            {"contest_name_raw": ["FOR SENATOR"], "total_votes": [5000.0]}
+        )
+        with pytest.raises(ValueError, match="party"):
+            _validate_csv_columns(df, tmp_path / "test.csv")
+
+    def test_raises_when_total_votes_missing(self, tmp_path):
+        import pandas as pd
+
+        df = pd.DataFrame({"contest_name_raw": ["FOR SENATOR"], "party": ["DEM"]})
+        with pytest.raises(ValueError, match="total votes"):
+            _validate_csv_columns(df, tmp_path / "test.csv")
+
+    def test_error_names_all_missing_required_columns(self, tmp_path):
+        import pandas as pd
+
+        df = pd.DataFrame({"unrelated": [1]})
+        with pytest.raises(ValueError) as exc_info:
+            _validate_csv_columns(df, tmp_path / "test.csv")
+        msg = str(exc_info.value)
+        assert "contest name" in msg
+        assert "party" in msg
+        assert "total votes" in msg
+
+    def test_error_includes_filename(self, tmp_path):
+        import pandas as pd
+
+        df = pd.DataFrame({"unrelated": [1]})
+        with pytest.raises(ValueError, match="myfile.csv"):
+            _validate_csv_columns(df, tmp_path / "myfile.csv")
+
+    def test_optional_columns_added_as_nan_when_absent(self, tmp_path):
+        import pandas as pd
+
+        df = self._df()
+        result = _validate_csv_columns(df, tmp_path / "test.csv")
+        for col in OPTIONAL_CSV_COLUMNS:
+            assert col in result.columns, f"Optional column {col!r} not added"
+            assert pd.isna(result[col].iloc[0])
+
+    def test_existing_optional_columns_preserved(self, tmp_path):
+        df = self._df(line_number=7, choice_name="Jane Smith")
+        result = _validate_csv_columns(df, tmp_path / "test.csv")
+        assert result["line_number"].iloc[0] == 7
+        assert result["choice_name"].iloc[0] == "Jane Smith"
+
+
+# ---------------------------------------------------------------------------
+# REQUIRED_CSV_COLUMNS / OPTIONAL_CSV_COLUMNS constants
+# ---------------------------------------------------------------------------
+
+
+class TestCsvColumnConstants:
+    def test_required_columns_are_post_normalisation_names(self):
+        # These are internal names, not raw CSV header names
+        assert "contest_name_raw" in REQUIRED_CSV_COLUMNS
+        assert "party" in REQUIRED_CSV_COLUMNS
+        assert "total_votes" in REQUIRED_CSV_COLUMNS
+
+    def test_optional_columns_do_not_overlap_required(self):
+        assert not REQUIRED_CSV_COLUMNS & set(OPTIONAL_CSV_COLUMNS)
+
+
+# ---------------------------------------------------------------------------
 # ElectionLoader.load_csv
 # ---------------------------------------------------------------------------
 
@@ -227,6 +328,29 @@ class TestLoaderLoadCsv:
         loader = ElectionLoader(db)
         _, new_names = loader.load_csv(path, config)
         assert "FOR BRAND NEW CONTEST" in new_names
+
+    def test_raises_when_required_column_missing(self, db, tmp_path):
+        # Write a CSV that has no "party name" column
+        p = tmp_path / "2026-general-primary.csv"
+        p.write_text(
+            "line number,contest name,choice name,total votes\n"
+            "1,FOR SENATOR,Jane Smith,5000\n"
+        )
+        config = {"name": "2026 General Primary", "source_file": p.name}
+        loader = ElectionLoader(db)
+        with pytest.raises(ValueError, match="party"):
+            loader.load_csv(p, config)
+
+    def test_loads_csv_with_only_required_columns(self, db, tmp_path):
+        # A minimal CSV with only the three required columns should load fine
+        p = tmp_path / "2026-general-primary.csv"
+        p.write_text(
+            "contest name,party name,total votes\nFOR SENATOR (Vote For 1),D,5000\n"
+        )
+        config = {"name": "2026 General Primary", "source_file": p.name}
+        loader = ElectionLoader(db)
+        election, _ = loader.load_csv(p, config)
+        assert election.id is not None
 
     def test_election_date_from_config(self, db, tmp_path):
         path = write_csv(

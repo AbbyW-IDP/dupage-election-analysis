@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.election_analysis_generator.db import ElectionDatabase
-from src.election_analysis_generator.models import Election
+from election_analysis.db import ElectionDatabase
+from election_analysis.models import Election
 
 DEFAULT_SOURCES_DIR = Path("sources")
 DEFAULT_CONFIG_PATH = Path("elections.toml")
@@ -27,6 +27,24 @@ VALID_CATEGORIES = frozenset(
     {"Consolidated", "Consolidated Primary", "General", "General Primary"}
 )
 VALID_ELECTION_TYPES = frozenset({"presidential", "midterm"})
+
+
+# Required columns (post-normalisation names). All other source columns are optional.
+REQUIRED_CSV_COLUMNS = frozenset({"contest_name_raw", "party", "total_votes"})
+
+# All known optional columns. Any absent ones are added as NaN so the rest of
+# the pipeline doesn't need to guard against missing columns.
+OPTIONAL_CSV_COLUMNS = (
+    "line_number",
+    "choice_name",
+    "percent_of_votes",
+    "registered_voters",
+    "ballots_cast",
+    "num_precinct_total",
+    "num_precinct_rptg",
+    "over_votes",
+    "under_votes",
+)
 
 
 def _normalize_csv_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -39,6 +57,35 @@ def _normalize_csv_columns(df: pd.DataFrame) -> pd.DataFrame:
             "party_name": "party",
         }
     )
+
+
+def _validate_csv_columns(df: pd.DataFrame, path: Path) -> pd.DataFrame:
+    """
+    Check that all required columns are present and add any missing optional
+    columns as NaN.
+
+    Raises ValueError naming every missing required column.
+    """
+    missing_required = REQUIRED_CSV_COLUMNS - set(df.columns)
+    if missing_required:
+        # Map back to original CSV header names for a readable error message
+        display = {
+            "contest_name_raw": "contest name",
+            "party": "party",
+            "total_votes": "total votes",
+        }
+        friendly = sorted(display.get(c, c) for c in missing_required)
+        raise ValueError(
+            f"{path.name} is missing required column(s): {', '.join(friendly)}"
+        )
+
+    # Add any absent optional columns as NaN so downstream code doesn't need
+    # to guard against their absence
+    for col in OPTIONAL_CSV_COLUMNS:
+        if col not in df.columns:
+            df[col] = None
+
+    return df
 
 
 def _year_from_filename(filename: str) -> int | None:
@@ -175,6 +222,7 @@ class ElectionLoader:
         except UnicodeDecodeError:
             df = pd.read_csv(path, encoding="windows-1252")
         df = _normalize_csv_columns(df)
+        df = _validate_csv_columns(df, path)
 
         year = config.get("year") or _year_from_filename(path.name)
         if year is None:
