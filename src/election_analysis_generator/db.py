@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.election_analysis_generator.models import Election, Contest, Candidate
-from src.election_analysis_generator.normalize import normalize_contest_name, normalize_party
+from election_analysis.models import Election, Contest, Candidate
+from election_analysis.normalize import normalize_contest_name, normalize_party
 
 DEFAULT_DB_PATH = Path("elections.db")
 
@@ -44,10 +44,15 @@ _SCHEMA = """
         election_id         INTEGER NOT NULL REFERENCES elections(id),
         line_number         INTEGER,
         contest_name_raw    TEXT NOT NULL,
+        contest_name        TEXT NOT NULL,
+        election_name       TEXT NOT NULL,
+        year                INTEGER NOT NULL,
         choice_name         TEXT,
         party               TEXT,
         total_votes         REAL,
         percent_of_votes    REAL,
+        registered_voters   REAL,
+        ballots_cast        REAL,
         num_precinct_total  REAL,
         num_precinct_rptg   REAL,
         over_votes          REAL,
@@ -126,19 +131,18 @@ class ElectionDatabase:
     def insert_election(self, election: Election, df: pd.DataFrame) -> Election:
         """
         Insert an Election and all its candidates from a normalized DataFrame.
-        Derives ballots_cast and registered_voters from the DataFrame if not
-        already set on the Election object.
+
+        ballots_cast and registered_voters on the elections table come from
+        elections.toml (via the Election object) and represent election-wide
+        figures. Per-contest figures from the CSV rows are stored directly on
+        each candidate row and may differ from the election-wide totals.
+
         Returns the Election with its database id populated.
         """
         overrides = self.get_overrides()
 
-        # Prefer explicit values from the Election object; fall back to CSV data
         ballots_cast = election.ballots_cast
         registered_voters = election.registered_voters
-        if ballots_cast is None and "ballots_cast" in df.columns:
-            ballots_cast = int(df["ballots_cast"].max())
-        if registered_voters is None and "registered_voters" in df.columns:
-            registered_voters = int(df["registered_voters"].max())
 
         cur = self._conn.execute(
             """
@@ -209,19 +213,26 @@ class ElectionDatabase:
                 """
                 INSERT INTO candidates
                     (contest_id, election_id, line_number, contest_name_raw,
+                     contest_name, election_name, year,
                      choice_name, party, total_votes, percent_of_votes,
+                     registered_voters, ballots_cast,
                      num_precinct_total, num_precinct_rptg, over_votes, under_votes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     contest_id,
                     election_id,
                     int(row["line_number"]) if row.get("line_number") is not None and not pd.isna(row.get("line_number")) else None,
                     row["contest_name_raw"],
+                    row["contest_name"],
+                    election.name,
+                    election.year,
                     row.get("choice_name"),
                     row.get("party"),
                     row.get("total_votes"),
                     row.get("percent_of_votes"),
+                    row.get("registered_voters"),
+                    row.get("ballots_cast"),
                     row.get("num_precinct_total"),
                     row.get("num_precinct_rptg"),
                     row.get("over_votes"),

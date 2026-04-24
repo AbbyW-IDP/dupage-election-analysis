@@ -7,8 +7,8 @@ from datetime import date
 import pytest
 import pandas as pd
 
-from src.election_analysis_generator.analysis import ElectionAnalyzer
-from src.election_analysis_generator.models import Election
+from election_analysis.analysis import ElectionAnalyzer
+from election_analysis.models import Election
 from tests.conftest import seed_election
 
 
@@ -367,8 +367,8 @@ class TestTurnout:
     def test_pct_vote_calculation(self, db):
         seed_election(db, "2022 General Primary", 2022, [
             {"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM",
-             "total_votes": 5000, "registered_voters": 100000, "ballots_cast": 25000},
-        ])
+             "total_votes": 5000},
+        ], ballots_cast=25000, registered_voters=100000)
         analyzer = ElectionAnalyzer(db)
         result = analyzer.turnout()
         assert abs(result.loc["% Vote", "2022 General Primary"] - 0.25) < 1e-6
@@ -394,9 +394,9 @@ class TestAggregatedCsv:
 
     EXPECTED_COLUMNS = [
         "line number", "contest name", "choice name", "party",
-        "total votes", "percent of votes",
+        "total votes", "percent of votes", "registered voters", "ballots cast",
         "num precinct total", "num precinct rptg", "over votes", "under votes",
-        "year", "category", "contest name (normalized)",
+        "year", "category", "contest name (normalized)", "election name",
     ]
 
     def test_returns_dataframe(self, analyzer):

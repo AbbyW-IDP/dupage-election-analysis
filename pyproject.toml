@@ -25,13 +25,9 @@ dev = [
     "pytest-cov>=5.0",
 ]
 
-[tool.pytest.ini_options]
+[tool.pytest]
 testpaths = ["tests"]
 addopts = [
-    "--cov=election_analysis",
+    "--cov=src/election_analysis_generator",
     "--cov-report=term-missing",
 ]
-
-[tool.coverage.run]
-source = ["election_analysis"]
-omit = ["tests/*"]

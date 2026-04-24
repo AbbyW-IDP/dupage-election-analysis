@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from src.election_analysis_generator.db import ElectionDatabase, DEFAULT_DB_PATH
-from src.election_analysis_generator.models import Election
+from election_analysis.db import ElectionDatabase, DEFAULT_DB_PATH
+from election_analysis.models import Election
 from tests.conftest import make_candidates_df, seed_election
 
 
@@ -52,8 +52,10 @@ class TestSchema:
         cols = set(db.query("PRAGMA table_info(candidates)")["name"])
         expected = {
             "id", "contest_id", "election_id", "line_number",
-            "contest_name_raw", "choice_name", "party", "total_votes",
-            "percent_of_votes", "num_precinct_total", "num_precinct_rptg",
+            "contest_name_raw", "contest_name", "election_name", "year",
+            "choice_name", "party", "total_votes", "percent_of_votes",
+            "registered_voters", "ballots_cast",
+            "num_precinct_total", "num_precinct_rptg",
             "over_votes", "under_votes",
         }
         assert expected.issubset(cols)
@@ -121,15 +123,38 @@ class TestInsertElection:
         count = db.query("SELECT COUNT(*) AS n FROM candidates").iloc[0]["n"]
         assert count == 2
 
-    def test_derives_ballots_cast_from_csv(self, db, sample_election):
-        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)", "ballots_cast": 12345}])
-        result = db.insert_election(sample_election, df)
-        assert result.ballots_cast == 12345
+    def test_elections_ballots_cast_comes_from_toml(self, db):
+        """Elections-level ballots_cast comes from elections.toml (the Election object),
+        not from CSV rows. Per-contest figures are stored on candidates instead."""
+        from election_analysis.models import Election
+        from datetime import date
+        election = Election(
+            id=None, name="2022 General Primary", year=2022,
+            election_date=date(2022, 6, 28), results_last_updated=None,
+            source_file="2022-gp.csv", ballots_cast=145051, registered_voters=636341,
+        )
+        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)",
+                                   "ballots_cast": 99999, "registered_voters": 88888}])
+        result = db.insert_election(election, df)
+        # elections table should have the toml values, not the CSV row values
+        assert result.ballots_cast == 145051
+        assert result.registered_voters == 636341
 
-    def test_derives_registered_voters_from_csv(self, db, sample_election):
-        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)", "registered_voters": 99999}])
-        result = db.insert_election(sample_election, df)
-        assert result.registered_voters == 99999
+    def test_candidates_ballots_cast_comes_from_csv(self, db, sample_election):
+        """Per-contest ballots_cast is stored on candidates from the CSV row."""
+        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)",
+                                   "ballots_cast": 55555}])
+        db.insert_election(sample_election, df)
+        val = db.query("SELECT ballots_cast FROM candidates").iloc[0]["ballots_cast"]
+        assert val == 55555
+
+    def test_candidates_registered_voters_comes_from_csv(self, db, sample_election):
+        """Per-contest registered_voters is stored on candidates from the CSV row."""
+        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)",
+                                   "registered_voters": 77777}])
+        db.insert_election(sample_election, df)
+        val = db.query("SELECT registered_voters FROM candidates").iloc[0]["registered_voters"]
+        assert val == 77777
 
     def test_creates_contest_for_each_unique_name(self, db, sample_election):
         df = make_candidates_df([
@@ -145,6 +170,24 @@ class TestInsertElection:
         db.insert_election(sample_election, df)
         name = db.query("SELECT contest_name FROM contests").iloc[0]["contest_name"]
         assert name == "FOR SENATOR"
+
+    def test_candidates_stores_normalized_contest_name(self, db, sample_election):
+        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM"}])
+        db.insert_election(sample_election, df)
+        name = db.query("SELECT contest_name FROM candidates").iloc[0]["contest_name"]
+        assert name == "FOR SENATOR"
+
+    def test_candidates_stores_election_name(self, db, sample_election):
+        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM"}])
+        db.insert_election(sample_election, df)
+        name = db.query("SELECT election_name FROM candidates").iloc[0]["election_name"]
+        assert name == "2022 General Primary"
+
+    def test_candidates_stores_year(self, db, sample_election):
+        df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "DEM"}])
+        db.insert_election(sample_election, df)
+        year = db.query("SELECT year FROM candidates").iloc[0]["year"]
+        assert year == 2022
 
     def test_normalizes_party(self, db, sample_election):
         df = make_candidates_df([{"contest_name_raw": "FOR SENATOR (Vote For 1)", "party": "D"}])

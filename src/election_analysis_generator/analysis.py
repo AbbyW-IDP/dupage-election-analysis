@@ -12,8 +12,8 @@ from datetime import date
 
 import pandas as pd
 
-from src.election_analysis_generator.db import ElectionDatabase
-from src.election_analysis_generator.models import Election
+from election_analysis.db import ElectionDatabase
+from election_analysis.models import Election
 
 
 def _resolve_elections(
@@ -369,11 +369,11 @@ class ElectionAnalyzer:
 
             Original source columns (using original CSV header names):
                 line number, contest name, choice name, party,
-                total votes, percent of votes,
+                total votes, percent of votes, registered voters, ballots cast,
                 num precinct total, num precinct rptg, over votes, under votes
 
             Added columns:
-                year, category, contest name (normalized)
+                year, election name, category, contest name (normalized)
         """
         if elections:
             resolved = _resolve_elections(self._db, list(elections))
@@ -394,18 +394,20 @@ class ElectionAnalyzer:
                 ca.party                AS "party",
                 ca.total_votes          AS "total votes",
                 ca.percent_of_votes     AS "percent of votes",
+                ca.registered_voters    AS "registered voters",
+                ca.ballots_cast         AS "ballots cast",
                 ca.num_precinct_total   AS "num precinct total",
                 ca.num_precinct_rptg    AS "num precinct rptg",
                 ca.over_votes           AS "over votes",
                 ca.under_votes          AS "under votes",
-                e.year                  AS "year",
+                ca.year                 AS "year",
                 e.category              AS "category",
-                co.contest_name         AS "contest name (normalized)"
+                ca.contest_name         AS "contest name (normalized)",
+                ca.election_name        AS "election name"
             FROM candidates ca
-            JOIN elections e  ON ca.election_id = e.id
-            JOIN contests  co ON ca.contest_id  = co.id
+            JOIN elections e ON ca.election_id = e.id
             WHERE e.id IN ({id_placeholders})
-            ORDER BY e.year, co.contest_name, ca.party, ca.choice_name
+            ORDER BY ca.year, ca.contest_name, ca.party, ca.choice_name
             """,
             election_ids,
         )

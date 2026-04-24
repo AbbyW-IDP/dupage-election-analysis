@@ -9,8 +9,8 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from src.election_analysis_generator.db import ElectionDatabase
-from src.election_analysis_generator.models import Election
+from election_analysis.db import ElectionDatabase
+from election_analysis.models import Election
 
 
 @pytest.fixture
@@ -66,12 +66,17 @@ def seed_election(
     election_date: date | None = None,
     category: str = "General Primary",
     election_type: str = "midterm",
+    ballots_cast: int | None = None,
+    registered_voters: int | None = None,
 ) -> Election:
     """
     Insert an Election with candidate rows directly into the database.
     Contest names are pre-registered so they aren't flagged as unknown.
+
+    ballots_cast and registered_voters are election-wide totals (from
+    elections.toml in production). Per-contest figures live on candidate rows.
     """
-    from src.election_analysis_generator.normalize import normalize_contest_name
+    from election_analysis.normalize import normalize_contest_name
 
     df = make_candidates_df(rows)
 
@@ -89,6 +94,8 @@ def seed_election(
         source_file=f"{name.lower().replace(' ', '-')}.csv",
         category=category,
         election_type=election_type,
+        ballots_cast=ballots_cast,
+        registered_voters=registered_voters,
     )
     election = db.insert_election(election, df)
     db.register_source(election.source_file, election.id)

@@ -40,11 +40,16 @@ class Candidate:
     contest_id: int
     election_id: int
     contest_name_raw: str
+    contest_name: str
+    election_name: str
+    year: int
     line_number: int | None = None
     choice_name: str | None = None
     party: str | None = None
     total_votes: float | None = None
     percent_of_votes: float | None = None
+    registered_voters: float | None = None
+    ballots_cast: float | None = None
     num_precinct_total: float | None = None
     num_precinct_rptg: float | None = None
     over_votes: float | None = None
