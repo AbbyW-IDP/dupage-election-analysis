@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from election_analysis.loader import (
+from src.election_analysis_generator.loader import (
     ElectionLoader,
     _normalize_csv_columns,
     _validate_csv_columns,

@@ -10,8 +10,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from election_analysis.models import Election, Contest, Candidate
-from election_analysis.normalize import normalize_contest_name, normalize_party
+from src.election_analysis_generator.models import Election, Contest, Candidate
+from src.election_analysis_generator.normalize import (
+    normalize_contest_name,
+    normalize_party,
+)
 
 DEFAULT_DB_PATH = Path("elections.db")
 

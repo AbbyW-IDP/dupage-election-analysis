@@ -12,8 +12,8 @@ from datetime import date
 
 import pandas as pd
 
-from election_analysis.db import ElectionDatabase
-from election_analysis.models import Election
+from src.election_analysis_generator.db import ElectionDatabase
+from src.election_analysis_generator.models import Election
 
 
 def _resolve_elections(

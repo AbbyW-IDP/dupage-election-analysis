@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from election_analysis.db import ElectionDatabase, DEFAULT_DB_PATH
-from election_analysis.models import Election
+from src.election_analysis_generator.db import ElectionDatabase, DEFAULT_DB_PATH
+from src.election_analysis_generator.models import Election
 from tests.conftest import make_candidates_df, seed_election
 
 
@@ -146,7 +146,7 @@ class TestInsertElection:
     def test_elections_ballots_cast_comes_from_toml(self, db):
         """Elections-level ballots_cast comes from elections.toml (the Election object),
         not from CSV rows. Per-contest figures are stored on candidates instead."""
-        from election_analysis.models import Election
+        from src.election_analysis_generator.models import Election
         from datetime import date
 
         election = Election(
