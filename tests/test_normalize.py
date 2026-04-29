@@ -5,6 +5,7 @@ Tests for election_analysis.normalize
 import pytest
 from src.election_analysis_generator.normalize import (
     normalize_contest_name,
+    normalize_candidate_names,
     normalize_party,
 )
 
@@ -153,3 +154,83 @@ class TestNormalizeParty:
 
     def test_unknown_party_returned_as_is(self):
         assert normalize_party("LIB") == "LIB"
+
+
+class TestNormalizeCandidateName:
+    # --- Punctuation stripping ---
+
+    def test_dots_stripped_from_initials(self):
+        """'J.B.' → 'JB' after punctuation stripping."""
+        assert normalize_candidate_names("J.B.", "PRITZKER") == ("JB", "PRITZKER")
+
+    def test_no_punctuation_name_unchanged(self):
+        """A name with no punctuation is returned as-is (modulo case)."""
+        first, last = normalize_candidate_names("JB", "PRITZKER")
+        assert first == "JB"
+
+    def test_hyphenated_last_name_stripped(self):
+        """Hyphens are stripped from last names."""
+        assert normalize_candidate_names("Jane", "Smith-Jones") == ("Jane", "SMITHJONES")
+
+    def test_apostrophe_stripped(self):
+        """Apostrophes are stripped (e.g. O'Brien → OBRIEN)."""
+        assert normalize_candidate_names("Pat", "O'Brien") == ("Pat", "OBRIEN")
+
+    def test_spaces_between_initials_stripped(self):
+        """'J. B.' (space between initials) → 'JB'."""
+        first, _ = normalize_candidate_names("J. B.", "PRITZKER")
+        assert first == "JB"
+
+    def test_plain_name_with_no_punctuation_case_preserved(self):
+        """A plain name with no punctuation keeps its original casing."""
+        assert normalize_candidate_names("Jane", "Smith") == ("Jane", "Smith")
+
+    # --- Pritzker last-name correction ---
+
+    def test_jb_no_dots_corrects_last_name(self):
+        """'JB PRITZER' → last name corrected to PRITZKER."""
+        assert normalize_candidate_names("JB", "PRITZER") == ("JB", "PRITZKER")
+
+    def test_jb_with_dots_corrects_last_name(self):
+        """'J.B. PRITZER' → punctuation stripped and last name corrected."""
+        assert normalize_candidate_names("J.B.", "PRITZER") == ("JB", "PRITZKER")
+
+    def test_jb_lowercase_corrects_last_name(self):
+        """Lowercase 'jb' is normalised and last name corrected."""
+        assert normalize_candidate_names("jb", "PRITZER") == ("JB", "PRITZKER")
+
+    def test_jb_mixed_case_last_name_corrected(self):
+        """Mixed-case 'Pritzer' is corrected."""
+        assert normalize_candidate_names("JB", "Pritzer") == ("JB", "PRITZKER")
+
+    def test_jb_with_spaces_between_initials_corrects_last_name(self):
+        """'J. B.' with space between initials triggers correction."""
+        assert normalize_candidate_names("J. B.", "PRITZER") == ("JB", "PRITZKER")
+
+    # --- Correction dict supports first-name-only and both-name corrections ---
+
+    def test_correction_can_fix_first_name(self, monkeypatch):
+        """A correction entry with a non-None first value updates first_name."""
+        from src.election_analysis_generator import normalize as norm
+        monkeypatch.setitem(norm._NAME_CORRECTIONS, ("BOB", "DOE"), ("ROBERT", None))
+        assert norm.normalize_candidate_names("BOB", "DOE") == ("ROBERT", "DOE")
+
+    def test_correction_can_fix_both_names(self, monkeypatch):
+        """A correction entry can update both first and last name."""
+        from src.election_analysis_generator import normalize as norm
+        monkeypatch.setitem(norm._NAME_CORRECTIONS, ("BOB", "DOE"), ("ROBERT", "DOUGH"))
+        assert norm.normalize_candidate_names("BOB", "DOE") == ("ROBERT", "DOUGH")
+
+    # --- Non-matching cases — nothing corrected ---
+
+    def test_different_first_name_not_corrected(self):
+        """A different first name with the misspelled last name is left alone."""
+        assert normalize_candidate_names("Janet", "PRITZER") == ("Janet", "PRITZER")
+
+    def test_correct_spelling_unchanged(self):
+        """Already-correct spelling is passed through untouched."""
+        assert normalize_candidate_names("JB", "PRITZKER") == ("JB", "PRITZKER")
+
+    def test_unrelated_candidate_unchanged(self):
+        """A completely unrelated name is returned as-is."""
+        assert normalize_candidate_names("Jane", "Smith") == ("Jane", "Smith")

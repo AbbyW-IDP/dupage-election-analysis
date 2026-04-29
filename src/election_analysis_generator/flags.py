@@ -1,5 +1,5 @@
 """
-election_analysis/flags.py
+election_analysis_generator/flags.py
 -------------------------
 All logic for exporting, importing, and interactively reviewing unresolved
 contest name flags.

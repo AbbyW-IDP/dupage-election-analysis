@@ -17,7 +17,7 @@ Current data covers DuPage County, Illinois (2014, 2018, 2022, 2026), sourced fr
 ├── sources/                    # Drop election CSVs here to load them
 │   ├── 2022-general-primary-2022-07-19.csv
 │   └── 2026-general-primary-2026-04-07.csv
-├── election_analysis/           # Package — all logic lives here
+├── election_analysis_generator/           # Package — all logic lives here
 │   ├── models.py               # Dataclasses: Election, Contest, Candidate
 │   ├── db.py                   # ElectionDatabase: all SQLite operations
 │   ├── loader.py               # ElectionLoader: reads config + CSVs into DB
