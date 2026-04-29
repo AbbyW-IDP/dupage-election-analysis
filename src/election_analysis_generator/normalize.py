@@ -137,35 +137,30 @@ def normalize_party(raw: str | None) -> str | None:
 # Candidate name corrections
 # ---------------------------------------------------------------------------
 
-# Each entry is (wrong_first, wrong_last, correct_first, correct_last).
+# Each entry is (wrong_name, correct_name).
 # Comparisons are case-insensitive exact string matches.
-CANDIDATE_NAME_CORRECTIONS: list[tuple[str, str, str, str]] = [
-    ("JB", "PRITZER", "JB", "PRITZKER"),
+CANDIDATE_NAME_CORRECTIONS: list[tuple[str, str]] = [
+    ("JB PRITZER", "JB PRITZKER"),
 ]
 
 
 def normalize_candidate_name(
-    first_name: str,
-    last_name: str,
-    corrections: list[tuple[str, str, str, str]] = CANDIDATE_NAME_CORRECTIONS,
-) -> tuple[str, str]:
+    name: str,
+    corrections: list[tuple[str, str]] = CANDIDATE_NAME_CORRECTIONS,
+) -> str:
     """
-    Apply known name corrections to a candidate's first and last name.
+    Apply known name corrections to a candidate's full name.
 
-    Each entry in ``corrections`` is a 4-tuple:
-        (wrong_first, wrong_last, correct_first, correct_last)
+    Each entry in ``corrections`` is a 2-tuple:
+        (wrong_name, correct_name)
 
-    Matching is case-insensitive. The corrected values are returned exactly
+    Matching is case-insensitive. The corrected value is returned exactly
     as written in the corrections list.
 
-    Returns the original (first_name, last_name) unchanged if no
-    correction applies.
+    Returns the original name unchanged if no correction applies.
     """
-    for wrong_first, wrong_last, correct_first, correct_last in corrections:
-        if (
-            first_name.casefold() == wrong_first.casefold()
-            and last_name.casefold() == wrong_last.casefold()
-        ):
-            return correct_first, correct_last
+    for wrong_name, correct_name in corrections:
+        if name.casefold() == wrong_name.casefold():
+            return correct_name
 
-    return first_name, last_name
+    return name

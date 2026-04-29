@@ -158,69 +158,50 @@ class TestNormalizeCandidateName:
     # --- Pritzker correction (default corrections list) ---
 
     def test_exact_match(self):
-        assert normalize_candidate_name("JB", "PRITZER") == ("JB", "PRITZKER")
+        assert normalize_candidate_name("JB PRITZER") == "JB PRITZKER"
 
-    def test_case_insensitive_first_name(self):
-        assert normalize_candidate_name("jb", "PRITZER") == ("JB", "PRITZKER")
+    def test_case_insensitive(self):
+        assert normalize_candidate_name("jb pritzer") == "JB PRITZKER"
 
-    def test_case_insensitive_last_name(self):
-        assert normalize_candidate_name("JB", "Pritzer") == ("JB", "PRITZKER")
+    def test_mixed_case(self):
+        assert normalize_candidate_name("JB Pritzer") == "JB PRITZKER"
 
-    def test_case_insensitive_both(self):
-        assert normalize_candidate_name("jb", "pritzer") == ("JB", "PRITZKER")
+    # --- Corrected value comes from the corrections list exactly ---
 
-    # --- Corrected values come from the corrections list exactly ---
-
-    def test_corrected_values_are_from_corrections_list(self):
-        """The returned names are the correct_first/correct_last from the tuple,
+    def test_corrected_value_is_from_corrections_list(self):
+        """The returned name is the correct_name from the tuple,
         not a transformation of the input."""
-        first, last = normalize_candidate_name("jb", "pritzer")
-        assert first == "JB"
-        assert last == "PRITZKER"
+        assert normalize_candidate_name("jb pritzer") == "JB PRITZKER"
 
-    # --- Punctuation is not stripped — must match exactly ---
+    # --- Non-matching cases — original value returned unchanged ---
 
-    def test_dots_in_first_name_do_not_match(self):
-        assert normalize_candidate_name("J.B.", "PRITZER") == ("J.B.", "PRITZER")
-
-    def test_spaces_between_initials_do_not_match(self):
-        assert normalize_candidate_name("J. B.", "PRITZER") == ("J. B.", "PRITZER")
-
-    # --- Non-matching cases — original values returned unchanged ---
-
-    def test_different_first_name_unchanged(self):
-        assert normalize_candidate_name("Janet", "PRITZER") == ("Janet", "PRITZER")
+    def test_different_name_unchanged(self):
+        assert normalize_candidate_name("Janet PRITZER") == "Janet PRITZER"
 
     def test_correct_spelling_unchanged(self):
-        assert normalize_candidate_name("JB", "PRITZKER") == ("JB", "PRITZKER")
+        assert normalize_candidate_name("JB PRITZKER") == "JB PRITZKER"
 
     def test_unrelated_candidate_unchanged(self):
-        assert normalize_candidate_name("Jane", "Smith") == ("Jane", "Smith")
+        assert normalize_candidate_name("Jane Smith") == "Jane Smith"
 
     # --- Custom corrections iterable ---
 
     def test_custom_corrections_applied(self):
-        custom = [("ROB", "BLAGOJEVICH", "ROD", "BLAGOJEVICH")]
-        assert normalize_candidate_name("ROB", "BLAGOJEVICH", custom) == (
-            "ROD",
-            "BLAGOJEVICH",
-        )
+        custom = [("ROB BLAGOJEVICH", "ROD BLAGOJEVICH")]
+        assert normalize_candidate_name("ROB BLAGOJEVICH", custom) == "ROD BLAGOJEVICH"
 
     def test_custom_corrections_replace_default(self):
         """Passing a custom list does not also apply the default corrections."""
-        custom = [("ROB", "BLAGOJEVICH", "ROD", "BLAGOJEVICH")]
-        assert normalize_candidate_name("JB", "PRITZER", custom) == ("JB", "PRITZER")
+        custom = [("ROB BLAGOJEVICH", "ROD BLAGOJEVICH")]
+        assert normalize_candidate_name("JB PRITZER", custom) == "JB PRITZER"
 
     def test_empty_corrections_list_returns_original(self):
-        assert normalize_candidate_name("JB", "PRITZER", []) == ("JB", "PRITZER")
+        assert normalize_candidate_name("JB PRITZER", []) == "JB PRITZER"
 
     def test_multiple_corrections_all_applied(self):
         custom = [
-            ("JB", "PRITZER", "JB", "PRITZKER"),
-            ("ROB", "BLAGOJEVICH", "ROD", "BLAGOJEVICH"),
+            ("JB PRITZER", "JB PRITZKER"),
+            ("ROB BLAGOJEVICH", "ROD BLAGOJEVICH"),
         ]
-        assert normalize_candidate_name("ROB", "BLAGOJEVICH", custom) == (
-            "ROD",
-            "BLAGOJEVICH",
-        )
-        assert normalize_candidate_name("JB", "PRITZER", custom) == ("JB", "PRITZKER")
+        assert normalize_candidate_name("ROB BLAGOJEVICH", custom) == "ROD BLAGOJEVICH"
+        assert normalize_candidate_name("JB PRITZER", custom) == "JB PRITZKER" 

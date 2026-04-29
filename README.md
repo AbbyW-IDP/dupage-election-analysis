@@ -140,26 +140,26 @@ Plain integers (e.g. `District 1`) are preserved. Original raw contest names are
 
 ## Candidate name corrections
 
-Known misspellings in candidate names are corrected on load via `CANDIDATE_NAME_CORRECTIONS` in `normalize.py`. Each entry is a 4-tuple:
+Known misspellings in candidate names are corrected on load via `CANDIDATE_NAME_CORRECTIONS` in `normalize.py`. Each entry is a 2-tuple:
 
 ```python
-(wrong_first, wrong_last, correct_first, correct_last)
+(wrong_name, correct_name)
 ```
 
-Matching is case-insensitive exact string matching. The corrected values are returned exactly as written in the tuple.
+Matching is case-insensitive exact string matching. The corrected value is returned exactly as written in the tuple.
 
 Current corrections:
 
-| Wrong first | Wrong last | Correct first | Correct last |
-|---|---|---|---|
-| `JB` | `PRITZER` | `JB` | `PRITZKER` |
+| Wrong name | Correct name |
+|---|---|
+| `JB PRITZER` | `JB PRITZKER` |
 
 To add a new correction, append a tuple to `CANDIDATE_NAME_CORRECTIONS` in `normalize.py`:
 
 ```python
-CANDIDATE_NAME_CORRECTIONS: list[tuple[str, str, str, str]] = [
-    ("JB", "PRITZER", "JB", "PRITZKER"),
-    ("WRONG_FIRST", "WRONG_LAST", "CORRECT_FIRST", "CORRECT_LAST"),  # new
+CANDIDATE_NAME_CORRECTIONS: list[tuple[str, str]] = [
+    ("JB PRITZER", "JB PRITZKER"),
+    ("WRONG NAME", "CORRECT NAME"),  # new
 ]
 ```
 
