@@ -217,7 +217,7 @@ When a flag is marked `mapped`, an entry is added to `contest_name_overrides` li
 
 **`analysis.py` — `ElectionAnalyzer`** reads from an `ElectionDatabase` and produces analysis DataFrames. Elections can be specified by name, database id, or `Election` object. Methods: `list_elections()`, `pct_change_by_party()`, `party_share()`, `turnout()`.
 
-**`normalize.py`** contains pure functions for contest name and party normalization — no state, no I/O, fully unit-tested independently.
+**`normalize.py`** contains pure functions for contest name, party, and candidate name normalization — no state, no I/O, fully unit-tested independently.
 
 **`flags.py`** contains `export_flags()`, `import_flags()`, and `review_flags()` — all flag-management logic in one place.
 
