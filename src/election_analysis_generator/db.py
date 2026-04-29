@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.election_analysis_generator.models import Election, Contest, Candidate
-from src.election_analysis_generator.normalize import (
+from .models import Election, Contest, Candidate
+from .normalize import (
     normalize_contest_name,
     normalize_party,
 )

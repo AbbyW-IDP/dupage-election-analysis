@@ -76,7 +76,7 @@ def seed_election(
     ballots_cast and registered_voters are election-wide totals (from
     elections.toml in production). Per-contest figures live on candidate rows.
     """
-    from src.election_analysis_generator.normalize import normalize_contest_name
+    from .normalize import normalize_contest_name
 
     df = make_candidates_df(rows)
 
