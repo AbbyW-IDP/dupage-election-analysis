@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.election_analysis_generator.db import ElectionDatabase
-from src.election_analysis_generator.models import Election
+from .db import ElectionDatabase
+from .models import Election
 
 DEFAULT_SOURCES_DIR = Path("sources")
 DEFAULT_CONFIG_PATH = Path("elections.toml")
