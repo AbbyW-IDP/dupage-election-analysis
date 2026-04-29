@@ -134,48 +134,38 @@ def normalize_party(raw: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Candidate name normalization
+# Candidate name corrections
 # ---------------------------------------------------------------------------
 
-def _strip_punctuation(name: str) -> str:
-    """Strip all non-alpha characters from a name and uppercase it.
+# Each entry is (wrong_first, wrong_last, correct_first, correct_last).
+# Comparisons are case-insensitive exact string matches.
+CANDIDATE_NAME_CORRECTIONS: list[tuple[str, str, str, str]] = [
+    ("JB", "PRITZER", "JB", "PRITZKER"),
+]
 
-    Used to normalise candidate names for lookup purposes only — the
-    original value is always preserved for storage.  Handles initials
-    with dots, hyphens, spaces between letters, apostrophes, etc.
+
+def normalize_candidate_name(
+    first_name: str,
+    last_name: str,
+    corrections: list[tuple[str, str, str, str]] = CANDIDATE_NAME_CORRECTIONS,
+) -> tuple[str, str]:
     """
-    return re.sub(r"[^A-Za-z]", "", name).upper()
+    Apply known name corrections to a candidate's first and last name.
 
+    Each entry in ``corrections`` is a 4-tuple:
+        (wrong_first, wrong_last, correct_first, correct_last)
 
-# Maps (normalized_first, normalized_last) -> (correct_first, correct_last).
-# Either element of the value tuple may be None to leave that field unchanged.
-# Add further entries here as new data-quality issues are discovered.
-_NAME_CORRECTIONS: dict[tuple[str, str], tuple[str | None, str | None]] = {
-    ("JB", "PRITZER"): (None, "PRITZKER"),
-}
+    Matching is case-insensitive. The corrected values are returned exactly
+    as written in the corrections list.
 
-
-def normalize_candidate_names(first_name: str, last_name: str) -> tuple[str, str]:
+    Returns the original (first_name, last_name) unchanged if no
+    correction applies.
     """
-    Preserve original first_name/last_name when returning values unless a
-    correction explicitly provides a replacement. Use stripped (uppercased,
-    punctuation-removed) forms only for lookup/comparison.
-    """
-    # Keep original forms (but normalize case for stable returns if desired)
-    out_first = first_name
-    out_last = last_name
+    for wrong_first, wrong_last, correct_first, correct_last in corrections:
+        if (
+            first_name.casefold() == wrong_first.casefold()
+            and last_name.casefold() == wrong_last.casefold()
+        ):
+            return correct_first, correct_last
 
-    # Stripped forms used only for lookup
-    stripped_first = _strip_punctuation(first_name)
-    stripped_last = _strip_punctuation(last_name)
-
-    # Lookup by stripped forms and apply corrections if present.
-    correction = _NAME_CORRECTIONS.get((stripped_first, stripped_last))
-    if correction is not None:
-        corrected_first, corrected_last = correction
-        if corrected_first is not None:
-            out_first = corrected_first
-        if corrected_last is not None:
-            out_last = corrected_last
-
-    return out_first, out_last
+    return first_name, last_name
