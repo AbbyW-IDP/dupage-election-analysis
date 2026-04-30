@@ -139,7 +139,7 @@ class ElectionAnalyzer:
             .filter(lambda g: len(g) == required)["contest_name"]
             .unique()
         )
-        return set(valid)
+        return set(valid.tolist())
 
     # ------------------------------------------------------------------
     # Analysis: percent change by party
@@ -211,7 +211,7 @@ class ElectionAnalyzer:
                 if col in pivot.columns:
                     ordered.append(col)
 
-        return pivot[ordered].rename(columns={"contest_name": "contest"})
+        return pivot[ordered].rename(columns={"contest_name": "contest"})  # type: ignore[call-overload]
 
     # ------------------------------------------------------------------
     # Analysis: party share of total votes
@@ -311,7 +311,7 @@ class ElectionAnalyzer:
             if pp_col in pivot.columns:
                 ordered.append(pp_col)
 
-        return pivot[ordered].rename(columns={"contest_name": "contest"})
+        return pivot[ordered].rename(columns={"contest_name": "contest"})  # type: ignore[call-overload]
 
     # ------------------------------------------------------------------
     # Analysis: turnout

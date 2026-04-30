@@ -756,7 +756,7 @@ class ElectionDatabase:
             return
         flag_df = df[["contest_name_raw", "contest_name"]].drop_duplicates().copy()
         flag_df["year"] = year
-        flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(
+        flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(  # type: ignore[union-attr]
             index=False
         )
         self._conn.executemany(

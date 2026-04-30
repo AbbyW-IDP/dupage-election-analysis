@@ -98,5 +98,6 @@ def seed_election(
         registered_voters=registered_voters,
     )
     election, _ = db.insert_election(election, df)
+    assert election.id is not None, "election must have an id after insert"
     db.register_source(election.source_file, election.id)
     return election
