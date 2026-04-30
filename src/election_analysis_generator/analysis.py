@@ -137,7 +137,7 @@ class ElectionAnalyzer:
             ]
             .groupby("contest_name")
             .filter(lambda g: len(g) == required)["contest_name"]
-            .unique()
+            .drop_duplicates()
         )
         return set(valid.tolist())
 
@@ -173,17 +173,20 @@ class ElectionAnalyzer:
                 ... (repeated per party)
         """
         a, b = _resolve_elections(self._db, [election_a, election_b])
-        totals = self._get_party_totals([a.id, b.id], parties)
+        if a.id is None or b.id is None:
+            raise RuntimeError("Resolved election has no id")
+        election_ids_ab: list[int] = [a.id, b.id]
+        totals = self._get_party_totals(election_ids_ab, parties)
 
         if comparable_only:
-            contests = self._comparable_contests(totals, [a.id, b.id], parties)
+            contests = self._comparable_contests(totals, election_ids_ab, parties)
         else:
-            contests = set(totals["contest_name"].unique())
+            contests = set(totals["contest_name"].drop_duplicates().tolist())
 
         if not contests:
             return pd.DataFrame(columns=["contest"])
 
-        df = totals[totals["contest_name"].isin(contests)].copy()
+        df = totals[totals["contest_name"].isin(list(contests))].copy()
 
         pivot = df.pivot_table(
             index="contest_name",
@@ -211,7 +214,8 @@ class ElectionAnalyzer:
                 if col in pivot.columns:
                     ordered.append(col)
 
-        result: pd.DataFrame = pivot[ordered]
+        result = pivot[ordered].copy()
+        assert isinstance(result, pd.DataFrame)
         return result.rename(columns={"contest_name": "contest"})
 
     # ------------------------------------------------------------------
@@ -251,14 +255,14 @@ class ElectionAnalyzer:
             raise ValueError("party_share requires at least 2 elections.")
 
         resolved = _resolve_elections(self._db, list(elections))
-        election_ids = [e.id for e in resolved]
+        election_ids: list[int] = [e.id for e in resolved if e.id is not None]
 
         totals = self._get_party_totals(election_ids, parties)
 
         if comparable_only:
             contests = self._comparable_contests(totals, election_ids, parties)
         else:
-            contests = set(totals["contest_name"].unique())
+            contests = set(totals["contest_name"].drop_duplicates().tolist())
 
         if not contests:
             return pd.DataFrame(columns=["contest"])
@@ -279,7 +283,7 @@ class ElectionAnalyzer:
             election_ids,
         )
 
-        df = totals[totals["contest_name"].isin(contests)].copy()
+        df = totals[totals["contest_name"].isin(list(contests))].copy()
         df = df.merge(all_totals, on=["election_id", "election_name", "contest_name"])
         df["vote_share"] = df["party_total"] / df["contest_total"]
 
@@ -312,7 +316,8 @@ class ElectionAnalyzer:
             if pp_col in pivot.columns:
                 ordered.append(pp_col)
 
-        result: pd.DataFrame = pivot[ordered]
+        result = pivot[ordered].copy()
+        assert isinstance(result, pd.DataFrame)
         return result.rename(columns={"contest_name": "contest"})
 
     # ------------------------------------------------------------------
@@ -379,9 +384,9 @@ class ElectionAnalyzer:
         """
         if elections:
             resolved = _resolve_elections(self._db, list(elections))
-            election_ids = [e.id for e in resolved]
+            election_ids: list[int] = [e.id for e in resolved if e.id is not None]
         else:
-            election_ids = [e.id for e in self._db.get_all_elections()]
+            election_ids = [e.id for e in self._db.get_all_elections() if e.id is not None]
 
         if not election_ids:
             return pd.DataFrame()
