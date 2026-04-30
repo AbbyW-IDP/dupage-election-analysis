@@ -252,6 +252,7 @@ class ElectionLoader:
         # no need to diff the contest_names registry before and after.
         election, new_names = self._db.insert_election(election, df)
 
-        assert election.id is not None, "election must have an id after insert"
+        if election.id is None:
+            raise RuntimeError("insert_election did not return an election id")
         self._db.register_source(path.name, election.id)
         return election, new_names

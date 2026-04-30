@@ -211,7 +211,8 @@ class ElectionAnalyzer:
                 if col in pivot.columns:
                     ordered.append(col)
 
-        return pivot[ordered].rename(columns={"contest_name": "contest"})  # type: ignore[call-overload]
+        result: pd.DataFrame = pivot[ordered]
+        return result.rename(columns={"contest_name": "contest"})
 
     # ------------------------------------------------------------------
     # Analysis: party share of total votes
@@ -311,7 +312,8 @@ class ElectionAnalyzer:
             if pp_col in pivot.columns:
                 ordered.append(pp_col)
 
-        return pivot[ordered].rename(columns={"contest_name": "contest"})  # type: ignore[call-overload]
+        result: pd.DataFrame = pivot[ordered]
+        return result.rename(columns={"contest_name": "contest"})
 
     # ------------------------------------------------------------------
     # Analysis: turnout
