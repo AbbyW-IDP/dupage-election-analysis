@@ -37,4 +37,6 @@ skips = ["*/*_test.py", "*/test_*.py"]
 
 [tool.pyright]
 pythonVersion = "3.14"
-include = ["src"]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"
