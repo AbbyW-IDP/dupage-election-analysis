@@ -1045,6 +1045,8 @@ class TestPrecinctTurnout:
                 }
             ],
         )
+        if election.id is None:
+            raise AssertionError("election.id must not be None after seeding")
         analyzer = ElectionAnalyzer(db)
         result = analyzer.precinct_turnout(election.id)
         assert isinstance(result, pd.DataFrame)

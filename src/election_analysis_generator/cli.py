@@ -20,8 +20,6 @@ from pathlib import Path
 
 from .db import ElectionDatabase, DEFAULT_DB_PATH
 from .loader import (
-    DEFAULT_SOURCES_DIR,
-    DEFAULT_CONFIG_PATH,
     LoadSummary,
     LoadPrecinctDetail,
     DEFAULT_SOURCES_DIR,
