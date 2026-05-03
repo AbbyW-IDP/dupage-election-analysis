@@ -16,8 +16,6 @@ change is therefore reflected automatically without any special-casing.
 These tests verify that invariant end-to-end.
 """
 
-import pytest
-
 from src.election_analysis_generator.analysis import ElectionAnalyzer
 from tests.conftest import seed_election
 
@@ -29,12 +27,15 @@ from tests.conftest import seed_election
 
 def _seed_precinct_row(db, election, contest_raw: str, choice_name: str, **overrides):
     """Insert one precinct result row for the given election/contest/candidate."""
-    contest_id = db._conn.execute(
+    row = db._conn.execute(
         "SELECT id FROM contests JOIN candidates "
         "ON contests.id = candidates.contest_id "
         "WHERE candidates.election_id = ? AND candidates.choice_name = ?",
         (election.id, choice_name),
-    ).fetchone()[0]
+    ).fetchone()
+    if row is None:
+        raise AssertionError(f"No contest found for choice_name={choice_name!r}")
+    contest_id = row[0]
 
     row = {
         "election_id": election.id,
