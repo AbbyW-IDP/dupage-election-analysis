@@ -128,7 +128,24 @@ def normalize_contest_name(raw_name: str) -> str:
     for pattern, replacement in replacements:
         name = re.sub(pattern, replacement, name)
 
-    # 8. Spell out ordinal numerals
+    # 8. Expand DuPage County township abbreviations in precinct committeeperson
+    #    contest names. Abbreviations appear in older CSVs (2014, 2018); later
+    #    CSVs spell the township name in full. Expansion runs only when
+    #    COMMITTEEPERSON is present so it does not affect unrelated contests.
+    #    D G and DG are both used for Downers Grove.
+    if "COMMITTEEPERSON" in name:
+        name = re.sub(r"\bD G\b", "DOWNERS GROVE", name)
+        name = re.sub(r"\bDG\b", "DOWNERS GROVE", name)
+        name = re.sub(r"\bADD\b", "ADDISON", name)
+        name = re.sub(r"\bBLM\b", "BLOOMINGDALE", name)
+        name = re.sub(r"\bLSL\b", "LISLE", name)
+        name = re.sub(r"\bMLT\b", "MILTON", name)
+        name = re.sub(r"\bNAP\b", "NAPERVILLE", name)
+        name = re.sub(r"\bWYN\b", "WAYNE", name)
+        name = re.sub(r"\bWNF\b", "WINFIELD", name)
+        name = re.sub(r"\bYRK\b", "YORK", name)
+
+    # 9. Spell out ordinal numerals
     def _replace_ordinal(m: re.Match) -> str:
         return ORDINAL_MAP[m.group(0).lower()].upper()
 

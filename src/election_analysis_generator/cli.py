@@ -6,7 +6,9 @@ Command-line entry points for the election_analysis package.
 Each function is registered as a [project.scripts] entry point in
 pyproject.toml, so after `uv sync` you can run:
 
+    status             Show what's loaded: elections and unresolved flag count
     sync-sources       Load new elections and precinct-detail files
+    load-detail        Load a precinct-detail file for an existing election
     generate-analysis  Write election_analysis.xlsx
     export-flags       Write flags_review.xlsx for spreadsheet review
     import-flags       Apply a reviewed flags_review.xlsx to the DB
@@ -38,6 +40,47 @@ from .flags import (
     DEFAULT_EXPORT_PATH,
     DEFAULT_IMPORT_PATH,
 )
+
+
+def _print_status(db: ElectionDatabase) -> None:
+    """Print a database status summary to stdout.
+
+    Extracted from status() so tests can pass an in-memory ElectionDatabase
+    directly without touching DEFAULT_DB_PATH.
+
+    Args:
+        db: An open ElectionDatabase to query.
+    """
+    analyzer = ElectionAnalyzer(db)
+    elections = analyzer.list_elections()
+    flags = db.get_unresolved_flags()
+
+    n_elections = len(elections)
+    n_flags = len(flags)
+
+    if n_elections == 0:
+        print("Elections database is empty.")
+        print("->  Add your CSVs to sources/ and define them in elections.csv, then run:")
+        print("       uv run sync-sources")
+        return
+
+    print(f"Elections loaded:  {n_elections}")
+    for _, row in elections.iterrows():
+        date_val = row.get("election_date")
+        date_str = f"  ({date_val})" if pd.notna(date_val) else ""
+        print(f"  {row['name']}{date_str}")
+
+    print()
+    if n_flags:
+        print(f"Unresolved flags:  {n_flags}   <- run review-flags or export-flags")
+    else:
+        print("Unresolved flags:  0")
+
+
+def status() -> None:
+    """Print a summary of what's currently in the database."""
+    with ElectionDatabase(DEFAULT_DB_PATH) as db:
+        _print_status(db)
 
 
 def sync_sources() -> None:
@@ -184,17 +227,29 @@ def generate_analysis() -> None:
         output_path = DEFAULT_OUTPUT.with_stem(f"{DEFAULT_OUTPUT.stem}_{ts}")
 
         print(f"Running pct_change_by_party: {recent_a!r} vs {recent_b!r}")
-        pct_change = analyzer.pct_change_by_party(recent_a, recent_b)
+        try:
+            pct_change = analyzer.pct_change_by_party(recent_a, recent_b)
+        except ValueError as e:
+            print(f"  Warning: {e}")
+            pct_change = None
+
         print("Running party_share across all elections")
-        share = analyzer.party_share(*names)
+        try:
+            share = analyzer.party_share(*names)
+        except ValueError as e:
+            print(f"  Warning: {e}")
+            share = None
+
         print("Running turnout across all elections")
         turnout = analyzer.turnout()
 
         print(f"\nWriting to {output_path}...")
         with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
             turnout.to_excel(writer, sheet_name="turnout")
-            pct_change.to_excel(writer, sheet_name="pct change by party", index=False)
-            share.to_excel(writer, sheet_name="party share", index=False)
+            if pct_change is not None:
+                pct_change.to_excel(writer, sheet_name="pct change by party", index=False)
+            if share is not None:
+                share.to_excel(writer, sheet_name="party share", index=False)
 
     print("Done.")
 
@@ -259,7 +314,7 @@ def import_flags_cmd() -> None:
     print(f"  {counts['ignored']:>5} ignored")
     print(f"  {counts['skipped']:>5} unreviewed (skipped)")
     if counts["errors"]:
-        print(f"  {counts['errors']:>5} errors — fix and re-run")
+        print(f"  {counts['errors']:>5} errors -- fix and re-run")
 
     remaining = counts["skipped"] + counts["errors"]
     if remaining:

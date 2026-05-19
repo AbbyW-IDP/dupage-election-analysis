@@ -647,11 +647,11 @@ class TestSuggestContestName:
         known = db.get_known_contest_names()
         assert db._suggest_contest_name("FOR GOVERNOR", known) == "FOR GOVERNOR"
 
-    def test_flag_suggestion_uses_registry_match(self, db, tmp_path):
-        # Seed a known contest in the registry
+    def test_for_prefix_match_auto_remaps_without_flag(self, db, tmp_path):
+        # When a normalized name matches a seed name with 'FOR ' prepended,
+        # it is auto-remapped at load time -- no flag is raised.
         db.register_contest_name("FOR ATTORNEY GENERAL", 2022)
 
-        # Load a new CSV whose contest normalizes to "ATTORNEY GENERAL" (no FOR)
         path = write_csv(
             tmp_path,
             ["1,ATTORNEY GENERAL (Vote For 1),Jane Smith,D,5000,100.0,50000,10000,10,10,0,0"],
@@ -659,10 +659,13 @@ class TestSuggestContestName:
         config = {"name": "2026 General Primary", "year": 2026, "summary_file": path.name, "election_date": "2026-04-07"}
         LoadSummary(db).load_csv(path, config)
 
+        # Auto-remapped: no flag, and contest_results uses the canonical name
         flags = db.get_unresolved_flags()
-        assert len(flags) == 1
-        # Suggestion should be the registry name, not the raw normalized string
-        assert flags[0]["contest_name"] == "FOR ATTORNEY GENERAL"
+        assert len(flags) == 0
+        names = db.query(
+            "SELECT DISTINCT contest_name FROM contest_results"
+        )["contest_name"].tolist()
+        assert names == ["FOR ATTORNEY GENERAL"]
 
     def test_flag_suggestion_fuzzy_match(self, db, tmp_path):
         # Seed a known contest with the "FOR " prefix

@@ -25,6 +25,7 @@ For a full description of each table and column, see README.md.
 """
 
 import difflib
+import csv
 import sqlite3
 from datetime import date
 from pathlib import Path
@@ -38,6 +39,7 @@ from .normalize import (
 )
 
 DEFAULT_DB_PATH = Path("elections.db")
+DEFAULT_CONTEST_NAMES_PATH = Path("contest-name-starter.csv")
 
 _SCHEMA = """
     -- One row per election event (e.g. "2022 General Primary")
@@ -189,8 +191,17 @@ class ElectionDatabase:
         db.close()
     """
 
-    def __init__(self, db_path: Path | str = DEFAULT_DB_PATH) -> None:
+    def __init__(
+        self,
+        db_path: Path | str = DEFAULT_DB_PATH,
+        contest_names_path: Path | None = None,
+    ) -> None:
         self._path = db_path
+        self._contest_names_path = (
+            contest_names_path
+            if contest_names_path is not None
+            else DEFAULT_CONTEST_NAMES_PATH
+        )
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
@@ -224,6 +235,25 @@ class ElectionDatabase:
         migration step needed.
         """
         self._conn.executescript(_SCHEMA)
+        self._conn.commit()
+        self._seed_contest_name_registry()
+
+    def _seed_contest_name_registry(self) -> None:
+        """Populate contest_name_registry from the seed CSV if it exists.
+
+        Called automatically by _create_schema() on every open. Uses
+        INSERT OR IGNORE so re-opening an existing database is safe.
+        The CSV uses standard CSV quoting; utf-8-sig strips the BOM.
+        No-op if the file does not exist.
+        """
+        if not self._contest_names_path.exists():
+            return
+        with open(self._contest_names_path, encoding="utf-8-sig", newline="") as f:
+            names = [row[0] for row in csv.reader(f) if row and row[0].strip()]
+        self._conn.executemany(
+            "INSERT OR IGNORE INTO contest_name_registry (contest_name, first_seen_year) VALUES (?, 0)",
+            [(name,) for name in names],
+        )
         self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -311,6 +341,7 @@ class ElectionDatabase:
 
         known = self.get_known_contest_names()
         normalized_df = self._normalize_df(df, self.get_overrides())
+        normalized_df = self._apply_for_prefix_remapping(normalized_df, known)
         new_names = self._upsert_contests(normalized_df, election.year, known)
         self._insert_candidates(
             normalized_df, election_id, election.name, election.year
@@ -375,6 +406,29 @@ class ElectionDatabase:
         df["party"] = df["party"].apply(normalize_party)
         return df
 
+    def _apply_for_prefix_remapping(
+        self, df: pd.DataFrame, known: set[str]
+    ) -> pd.DataFrame:
+        """Auto-remap normalized names matching a seed name with "FOR " prefix.
+
+        E.g. "COUNTY CLERK" -> "FOR COUNTY CLERK" when that name is in the
+        registry. Stores an override per raw name so future loads resolve
+        directly without re-checking.
+        """
+        remapped = False
+        for norm in df["contest_name"].unique():
+            if norm in known:
+                continue
+            candidate = f"FOR {norm}"
+            if candidate in known:
+                mask = df["contest_name"] == norm
+                df = df.copy() if not remapped else df
+                remapped = True
+                df.loc[mask, "contest_name"] = candidate
+                for raw in df.loc[mask, "contest_name_raw"].unique():
+                    self.add_override(raw, candidate)
+        return df
+
     def _upsert_contests(
         self,
         df: pd.DataFrame,
@@ -411,10 +465,6 @@ class ElectionDatabase:
         for contest_name in df["contest_name"].unique():
             contest_rows: pd.DataFrame = df[df["contest_name"] == contest_name]  # type: ignore[assignment]
             self._upsert_contest(contest_name, contest_rows)
-            self._conn.execute(
-                "INSERT OR IGNORE INTO contest_name_registry (contest_name, first_seen_year) VALUES (?,?)",
-                (contest_name, year),
-            )
             if contest_name not in known:
                 new_names.append(contest_name)
 
@@ -785,6 +835,47 @@ class ElectionDatabase:
             "INSERT OR REPLACE INTO contest_name_overrides (contest_name_raw, contest_name, note) VALUES (?,?,?)",
             (raw_name, canonical_name, note),
         )
+
+    def apply_override(self, from_name: str, to_name: str) -> int:
+        """Retroactively remap existing contest_results rows from one
+        contest name to another, and clean up the now-unused contests row.
+
+        Called after add_override() when resolving a flag so that
+        already-loaded data is updated to use the canonical name.
+        Returns the number of contest_results rows updated.
+        Does not commit -- the caller is responsible for committing.
+        """
+        self._conn.execute(
+            "INSERT OR IGNORE INTO contests (contest_name, is_legislation) VALUES (?, 0)",
+            (to_name,),
+        )
+        canonical_id: int = self._conn.execute(
+            "SELECT id FROM contests WHERE contest_name = ?", (to_name,)
+        ).fetchone()[0]
+        cursor = self._conn.execute(
+            "UPDATE contest_results SET contest_id = ?, contest_name = ? WHERE contest_name = ?",
+            (canonical_id, to_name, from_name),
+        )
+        rows_updated: int = cursor.rowcount
+        # Also remap candidate_precinct_results which has the same FK
+        old_id_row = self._conn.execute(
+            "SELECT id FROM contests WHERE contest_name = ?", (from_name,)
+        ).fetchone()
+        if old_id_row:
+            self._conn.execute(
+                "UPDATE candidate_precinct_results SET contest_id = ? WHERE contest_id = ?",
+                (canonical_id, old_id_row[0]),
+            )
+        still_referenced = self._conn.execute(
+            "SELECT 1 FROM contest_results WHERE contest_id = "
+            "(SELECT id FROM contests WHERE contest_name = ?) LIMIT 1",
+            (from_name,),
+        ).fetchone()
+        if not still_referenced:
+            self._conn.execute(
+                "DELETE FROM contests WHERE contest_name = ?", (from_name,)
+            )
+        return rows_updated
 
     # ------------------------------------------------------------------
     # Flags
