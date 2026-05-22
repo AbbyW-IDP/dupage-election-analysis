@@ -161,6 +161,39 @@ class TestNormalizeContestName:
 
     @pytest.mark.parametrize("raw, expected", [
         pytest.param(
+            "Attorney General, State of Illinois - D*",
+            "ATTORNEY GENERAL",
+            id="attorney_general_state_of_illinois",
+        ),
+        pytest.param(
+            "Governor and Lt Governor, State of Illinois - D*",
+            "GOVERNOR AND LT GOVERNOR",
+            id="governor_state_of_illinois",
+        ),
+        pytest.param(
+            "Comptroller, State of Illinois - R",
+            "COMPTROLLER",
+            id="comptroller_state_of_illinois",
+        ),
+        pytest.param(
+            "State Treasurer, State of Illinois - D",
+            "STATE TREASURER",
+            id="treasurer_state_of_illinois",
+        ),
+        pytest.param(
+            "FOR ATTORNEY GENERAL (Vote For 1)",
+            "FOR ATTORNEY GENERAL",
+            id="unaffected_name_without_state_of_illinois",
+        ),
+    ])
+    def test_strips_state_of_illinois_suffix(self, raw, expected):
+        """', State of Illinois' is stripped before party suffix and uppercasing
+        so that 2014/2018 names match the canonical 2022/2026 forms."""
+        assert normalize_contest_name(raw) == expected
+
+
+    @pytest.mark.parametrize("raw, expected", [
+        pytest.param(
             "Tri-State Fire Protection - General Obligation Bonds (Vote For 1)",
             "TRI-STATE FIRE PROTECTION - GENERAL OBLIGATION BONDS",
             id="general_obligation_bonds_not_stripped_as_party_g",

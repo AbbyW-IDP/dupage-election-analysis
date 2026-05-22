@@ -587,42 +587,42 @@ class TestSeedContestNameRegistry:
         assert count == 1
 
 
-class TestApplyOverride:
-    """Tests for apply_override(), which retroactively repoints contest_results rows."""
+class TestRemapByRawName:
+    """Tests for remap_by_raw_name(), the primitive for flag resolution.
 
-    def _seed_contest_results(
-        self, db, from_name: str, to_name: str | None = None
-    ) -> tuple:
-        """Seed one election with two contest names and return (election, from_id).
+    Sets contest_name and contest_id on all contest_results rows matching
+    contest_name_raw, regardless of what was stored before. Re-importing a
+    corrected flags spreadsheet is idempotent.
+    """
 
-        from_name rows are seeded as the "old" name to be remapped.
-        If to_name is provided it is also seeded (so a canonical row exists).
-        """
-        rows = [{"contest_name_raw": from_name, "party": "DEM"}]
-        if to_name:
-            rows.append({"contest_name_raw": to_name, "party": "DEM"})
-        election = seed_election(
-            db, "2022 General Primary", 2022, rows,
-            election_date=date(2022, 6, 28),
-        )
-        from_id = db._conn.execute(
-            "SELECT id FROM contests WHERE contest_name = ?", (from_name,)
-        ).fetchone()[0]
-        return election, from_id
-
-    def test_returns_count_of_updated_rows(self, db):
-        """apply_override returns the number of contest_results rows remapped."""
+    def test_updates_contest_results_by_raw_name(self, db):
+        """Rows with matching contest_name_raw get the new contest_name."""
+        # Arrange
         seed_election(db, "2022 General Primary", 2022,
-            [{"contest_name_raw": "OLD NAME", "party": "DEM"},
-             {"contest_name_raw": "OLD NAME", "party": "REP"}],
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"},
+             {"contest_name_raw": "OLD RAW NAME", "party": "REP"}],
             election_date=date(2022, 6, 28))
-        n = db.apply_override("OLD NAME", "FOR CANONICAL NAME")
-        assert n == 2
 
-    def test_contest_results_point_to_canonical_contest_id(self, db):
-        """After apply_override, all remapped rows reference the canonical contests.id."""
-        self._seed_contest_results(db, "OLD NAME")
-        db.apply_override("OLD NAME", "FOR CANONICAL NAME")
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert
+        names = db.query(
+            "SELECT DISTINCT contest_name FROM contest_results"
+        )["contest_name"].tolist()
+        assert names == ["FOR CANONICAL NAME"]
+
+    def test_updates_contest_id_to_canonical(self, db):
+        """contest_id is updated to point at the canonical contests row."""
+        # Arrange
+        seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"}],
+            election_date=date(2022, 6, 28))
+
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert
         canonical_id = db._conn.execute(
             "SELECT id FROM contests WHERE contest_name = ?",
             ("FOR CANONICAL NAME",),
@@ -633,112 +633,199 @@ class TestApplyOverride:
         )
         assert all(rows["contest_id"] == canonical_id)
 
-    def test_contest_results_contest_name_text_updated(self, db):
-        """The denormalized contest_name text column is updated to the canonical name."""
-        self._seed_contest_results(db, "OLD NAME")
-        db.apply_override("OLD NAME", "FOR CANONICAL NAME")
-        remaining = db.query(
-            "SELECT COUNT(*) AS n FROM contest_results WHERE contest_name = ?",
-            params=["OLD NAME"],
-        ).iloc[0]["n"]
-        assert remaining == 0
-
-    def test_orphaned_old_contest_row_is_deleted(self, db):
-        """The contests row for the old name is deleted when no rows reference it."""
-        self._seed_contest_results(db, "OLD NAME")
-        db.apply_override("OLD NAME", "FOR CANONICAL NAME")
-        old_row = db._conn.execute(
-            "SELECT id FROM contests WHERE contest_name = ?", ("OLD NAME",)
-        ).fetchone()
-        assert old_row is None
-
-    def test_old_contest_row_kept_when_still_referenced(self, db):
-        """If another contest_results row still uses the old contest_id, the row is kept."""
-        # Seed two elections both using OLD NAME
+    def test_creates_canonical_contest_row_if_absent(self, db):
+        """The canonical contests row is created if it does not exist yet."""
+        # Arrange
         seed_election(db, "2022 General Primary", 2022,
-            [{"contest_name_raw": "OLD NAME", "party": "DEM"}],
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"}],
             election_date=date(2022, 6, 28))
-        seed_election(db, "2026 General Primary", 2026,
-            [{"contest_name_raw": "OLD NAME", "party": "DEM"}],
-            election_date=date(2026, 3, 17))
 
-        # Only remap rows whose contest_name text == "OLD NAME" (both elections)
-        # so the old contests row should be deleted since all references are remapped
-        db.apply_override("OLD NAME", "FOR CANONICAL NAME")
-        old_row = db._conn.execute(
-            "SELECT id FROM contests WHERE contest_name = ?", ("OLD NAME",)
-        ).fetchone()
-        # All rows were remapped, so old row should be gone
-        assert old_row is None
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "BRAND NEW CANONICAL NAME")
 
-    def test_canonical_contest_created_if_not_exists(self, db):
-        """apply_override creates the canonical contests row if it does not exist yet."""
-        self._seed_contest_results(db, "OLD NAME")
-        db.apply_override("OLD NAME", "BRAND NEW CANONICAL NAME")
+        # Assert
         row = db._conn.execute(
             "SELECT id FROM contests WHERE contest_name = ?",
             ("BRAND NEW CANONICAL NAME",),
         ).fetchone()
         assert row is not None
 
-    def test_canonical_contest_reused_if_already_exists(self, db):
-        """If the canonical contest already exists, its existing id is used."""
-        # Seed the canonical as a pre-existing contest with its own rows
-        self._seed_contest_results(db, "OLD NAME", to_name="FOR CANONICAL NAME")
+    def test_reuses_canonical_contest_row_if_already_exists(self, db):
+        """If the canonical contests row already exists, its id is preserved."""
+        # Arrange
+        seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"},
+             {"contest_name_raw": "FOR CANONICAL NAME", "party": "DEM"}],
+            election_date=date(2022, 6, 28))
         canonical_id_before = db._conn.execute(
             "SELECT id FROM contests WHERE contest_name = ?",
             ("FOR CANONICAL NAME",),
         ).fetchone()[0]
 
-        db.apply_override("OLD NAME", "FOR CANONICAL NAME")
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
 
+        # Assert
         canonical_id_after = db._conn.execute(
             "SELECT id FROM contests WHERE contest_name = ?",
             ("FOR CANONICAL NAME",),
         ).fetchone()[0]
         assert canonical_id_before == canonical_id_after
 
-    def test_returns_zero_when_no_rows_match(self, db):
-        """apply_override on a name with no contest_results rows returns 0."""
-        n = db.apply_override("NONEXISTENT NAME", "FOR CANONICAL NAME")
-        assert n == 0
-
-    @pytest.mark.parametrize("from_name,to_name", [
-        pytest.param(
-            "ATTORNEY GENERAL, STATE OF ILLINOIS",
-            "FOR ATTORNEY GENERAL",
-            id="attorney_general_cross_year",
-        ),
-        pytest.param(
-            "COMPTROLLER, STATE OF ILLINOIS",
-            "FOR COMPTROLLER",
-            id="comptroller_cross_year",
-        ),
-        pytest.param(
-            "STATE TREASURER",
-            "FOR TREASURER",
-            id="treasurer_cross_year",
-        ),
-    ])
-    def test_cross_year_name_remapping(self, db, from_name, to_name):
-        """Realistic cross-year name pairs remap correctly end-to-end."""
-        seed_election(db, "2014 General Primary", 2014,
-            [{"contest_name_raw": from_name, "party": "DEM"},
-             {"contest_name_raw": from_name, "party": "REP"}],
-            election_date=date(2014, 3, 18))
+    def test_returns_count_of_updated_rows(self, db):
+        """Returns the number of contest_results rows updated."""
+        # Arrange
         seed_election(db, "2022 General Primary", 2022,
-            [{"contest_name_raw": to_name, "party": "DEM"},
-             {"contest_name_raw": to_name, "party": "REP"}],
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"},
+             {"contest_name_raw": "OLD RAW NAME", "party": "REP"}],
             election_date=date(2022, 6, 28))
 
-        n = db.apply_override(from_name, to_name)
-        assert n == 2  # two rows remapped (DEM + REP for 2014)
+        # Act
+        n = db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
 
-        # All contest_results now use the canonical name
+        # Assert
+        assert n == 2
+
+    def test_returns_zero_when_no_rows_match(self, db):
+        """Returns 0 when no rows have the given contest_name_raw."""
+        # Arrange -- empty db
+
+        # Act
+        n = db.remap_by_raw_name("NONEXISTENT RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert
+        assert n == 0
+
+    def test_idempotent_on_reimport(self, db):
+        """Calling remap_by_raw_name twice with the same args is safe."""
+        # Arrange
+        seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"}],
+            election_date=date(2022, 6, 28))
+
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+        n = db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert -- second call still touches the rows (raw_name still matches)
+        assert n == 1
+        names = db.query(
+            "SELECT DISTINCT contest_name FROM contest_results"
+        )["contest_name"].tolist()
+        assert names == ["FOR CANONICAL NAME"]
+
+    def test_corrects_previously_wrong_import(self, db):
+        """Remapping to a different canonical name on re-import corrects mistakes."""
+        # Arrange
+        seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"}],
+            election_date=date(2022, 6, 28))
+        db.remap_by_raw_name("OLD RAW NAME", "WRONG NAME")
+
+        # Act -- re-import with correction
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert
+        names = db.query(
+            "SELECT DISTINCT contest_name FROM contest_results"
+        )["contest_name"].tolist()
+        assert names == ["FOR CANONICAL NAME"]
+
+    def test_only_affects_rows_matching_raw_name(self, db):
+        """Rows with a different contest_name_raw are not touched."""
+        # Arrange
+        seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"},
+             {"contest_name_raw": "OTHER RAW NAME", "party": "DEM"}],
+            election_date=date(2022, 6, 28))
+
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert
+        other = db.query(
+            "SELECT contest_name FROM contest_results WHERE contest_name_raw = ?",
+            params=["OTHER RAW NAME"],
+        )["contest_name"].tolist()
+        assert other == ["OTHER RAW NAME"]
+
+    def test_updates_candidate_precinct_results_contest_id(self, db):
+        """candidate_precinct_results.contest_id is updated to the canonical id."""
+        # Arrange
+        election = seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": "OLD RAW NAME", "party": "DEM"}],
+            election_date=date(2022, 6, 28))
+        old_cid = db._conn.execute(
+            "SELECT id FROM contests WHERE contest_name = ?", ("OLD RAW NAME",)
+        ).fetchone()[0]
+        db._conn.execute(
+            "INSERT INTO candidate_precinct_results"
+            " (election_id, contest_id, contest_name_raw, choice_name, precinct,"
+            "  registered_voters, early_votes, vote_by_mail, polling, provisional,"
+            "  total_votes)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (election.id, old_cid, "OLD RAW NAME", "Jane Smith", "Precinct 001",
+             1000, 100, 50, 300, 10, 460),
+        )
+        db._conn.commit()
+
+        # Act
+        db.remap_by_raw_name("OLD RAW NAME", "FOR CANONICAL NAME")
+
+        # Assert
+        canonical_id = db._conn.execute(
+            "SELECT id FROM contests WHERE contest_name = ?",
+            ("FOR CANONICAL NAME",),
+        ).fetchone()[0]
+        precinct_cids = db._conn.execute(
+            "SELECT DISTINCT contest_id FROM candidate_precinct_results"
+        ).fetchall()
+        assert all(row[0] == canonical_id for row in precinct_cids)
+
+    @pytest.mark.parametrize("raw_name,expected_name", [
+        pytest.param(
+            "Attorney General, State of Illinois - D*",
+            "FOR ATTORNEY GENERAL",
+            id="attorney_general_state_of_illinois",
+        ),
+        pytest.param(
+            "Comptroller, State of Illinois - R",
+            "FOR COMPTROLLER",
+            id="comptroller_state_of_illinois",
+        ),
+        pytest.param(
+            "State Treasurer - D",
+            "FOR TREASURER",
+            id="treasurer_missing_for_prefix",
+        ),
+    ])
+    def test_cross_year_name_remapping(self, db, raw_name, expected_name):
+        """Realistic cross-year name pairs remap correctly end-to-end.
+
+        raw_name is the raw contest name from an older CSV. expected_name is
+        the canonical form used in later elections. remap_by_raw_name() sets
+        the stored contest_name directly by raw_name, so it works correctly
+        on first import and on re-import with corrections.
+        """
+        # Arrange
+        seed_election(db, "2014 General Primary", 2014,
+            [{"contest_name_raw": raw_name, "party": "DEM"},
+             {"contest_name_raw": raw_name, "party": "REP"}],
+            election_date=date(2014, 3, 18))
+        seed_election(db, "2022 General Primary", 2022,
+            [{"contest_name_raw": expected_name, "party": "DEM"},
+             {"contest_name_raw": expected_name, "party": "REP"}],
+            election_date=date(2022, 6, 28))
+
+        # Act
+        n = db.remap_by_raw_name(raw_name, expected_name)
+
+        # Assert
+        assert n == 2  # DEM + REP for 2014
         distinct = db.query(
             "SELECT DISTINCT contest_name FROM contest_results"
         )["contest_name"].tolist()
-        assert distinct == [to_name]
+        assert distinct == [expected_name]
 
 
 class TestForPrefixRemapping:

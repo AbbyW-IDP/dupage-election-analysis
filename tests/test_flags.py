@@ -1,7 +1,7 @@
 """
 tests/test_flags.py
 -------------------
-Tests for flags.py: import_flags() and the apply_override integration.
+Tests for flags.py: import_flags() and the remap_by_raw_name integration.
 
 The interactive review_flags() function is not tested here -- it requires
 stdin simulation and is covered by manual testing.

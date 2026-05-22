@@ -281,12 +281,8 @@ def import_flags(
             counts["skipped"] += 1
 
         elif status == "accepted":
-            original = db._conn.execute(
-                "SELECT contest_name FROM contest_flags WHERE id = ?",
-                (flag_id,),
-            ).fetchone()[0]
             db.add_override(raw_name, normalized)
-            db.apply_override(original, normalized)
+            db.remap_by_raw_name(raw_name, normalized)
             db.register_contest_name(normalized, year)
             db.resolve_flag(flag_id)
             counts["accepted"] += 1
@@ -300,7 +296,7 @@ def import_flags(
                 counts["errors"] += 1
                 continue
             db.add_override(raw_name, override_target)
-            db.apply_override(normalized, override_target)
+            db.remap_by_raw_name(raw_name, override_target)
             db.register_contest_name(override_target, year)
             db.resolve_flag(flag_id)
             counts["mapped"] += 1
@@ -389,7 +385,7 @@ def review_flags(db: ElectionDatabase) -> None:
                 canonical = matches[int(idx) - 1]
                 note = input(f"  Note (optional, e.g. 'Renamed in {year}'): ").strip()
                 db.add_override(raw_name, canonical, note or None)
-                db.apply_override(norm, canonical)
+                db.remap_by_raw_name(raw_name, canonical)
                 db.resolve_flag(flag_id)
                 db._conn.commit()
                 print(f"  ✓ Mapped to: {canonical}\n")

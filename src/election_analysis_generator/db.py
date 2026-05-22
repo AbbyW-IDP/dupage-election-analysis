@@ -836,13 +836,23 @@ class ElectionDatabase:
             (raw_name, canonical_name, note),
         )
 
-    def apply_override(self, from_name: str, to_name: str) -> int:
-        """Retroactively remap existing contest_results rows from one
-        contest name to another, and clean up the now-unused contests row.
+    def remap_by_raw_name(self, raw_name: str, to_name: str) -> int:
+        """Set contest_name and contest_id for all rows matching contest_name_raw.
 
-        Called after add_override() when resolving a flag so that
-        already-loaded data is updated to use the canonical name.
-        Returns the number of contest_results rows updated.
+        Updates both contest_results and candidate_precinct_results. The
+        canonical contests row is created if it does not already exist.
+
+        This is the correct primitive for flag resolution. Because it keys
+        on contest_name_raw rather than the previously stored contest_name,
+        re-importing a corrected flags spreadsheet is always idempotent.
+
+        Args:
+            raw_name: The raw contest name from the source CSV.
+            to_name:  The canonical normalized name to write.
+
+        Returns:
+            The number of contest_results rows updated.
+
         Does not commit -- the caller is responsible for committing.
         """
         self._conn.execute(
@@ -853,29 +863,16 @@ class ElectionDatabase:
             "SELECT id FROM contests WHERE contest_name = ?", (to_name,)
         ).fetchone()[0]
         cursor = self._conn.execute(
-            "UPDATE contest_results SET contest_id = ?, contest_name = ? WHERE contest_name = ?",
-            (canonical_id, to_name, from_name),
+            "UPDATE contest_results SET contest_name = ?, contest_id = ?"
+            " WHERE contest_name_raw = ?",
+            (to_name, canonical_id, raw_name),
         )
-        rows_updated: int = cursor.rowcount
-        # Also remap candidate_precinct_results which has the same FK
-        old_id_row = self._conn.execute(
-            "SELECT id FROM contests WHERE contest_name = ?", (from_name,)
-        ).fetchone()
-        if old_id_row:
-            self._conn.execute(
-                "UPDATE candidate_precinct_results SET contest_id = ? WHERE contest_id = ?",
-                (canonical_id, old_id_row[0]),
-            )
-        still_referenced = self._conn.execute(
-            "SELECT 1 FROM contest_results WHERE contest_id = "
-            "(SELECT id FROM contests WHERE contest_name = ?) LIMIT 1",
-            (from_name,),
-        ).fetchone()
-        if not still_referenced:
-            self._conn.execute(
-                "DELETE FROM contests WHERE contest_name = ?", (from_name,)
-            )
-        return rows_updated
+        self._conn.execute(
+            "UPDATE candidate_precinct_results SET contest_id = ?"
+            " WHERE contest_name_raw = ?",
+            (canonical_id, raw_name),
+        )
+        return cursor.rowcount
 
     # ------------------------------------------------------------------
     # Flags
