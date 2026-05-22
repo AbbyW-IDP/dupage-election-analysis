@@ -889,7 +889,6 @@ class TestPrecinctTurnout:
         # Uses insert_election directly to set is_legislation=1 via the no-party path.
         # This is intentional: seed_election pre-registers the contest which bypasses
         # the flag-based legislation inference that this test specifically exercises.
-        from tests.conftest import make_candidates_df
         from src.election_analysis_generator.models import Election
 
         election = Election(

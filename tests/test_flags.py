@@ -9,7 +9,6 @@ stdin simulation and is covered by manual testing.
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import openpyxl
@@ -17,8 +16,6 @@ import pytest
 
 from src.election_analysis_generator.db import ElectionDatabase
 from src.election_analysis_generator.flags import import_flags
-from src.election_analysis_generator.models import Election
-from tests.conftest import make_candidates_df
 
 
 # ---------------------------------------------------------------------------

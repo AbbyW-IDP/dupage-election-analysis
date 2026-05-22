@@ -94,7 +94,6 @@ def export_flags(
 
 def _write_instructions_sheet(writer: pd.ExcelWriter) -> None:
     """Write a human-readable instructions sheet as the first tab."""
-    from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
 
     wb = writer.book
@@ -126,45 +125,57 @@ def _write_instructions_sheet(writer: pd.ExcelWriter) -> None:
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
 
     r = 1
-    _header(r, "How to review contest name flags"); r += 1
+    _header(r, "How to review contest name flags")
+    r += 1
     _text(r, (
         "Each row in the 'flags' tab is a contest name that appeared in a source file "
         "but was not recognized. Review each row and set the Status column to one of "
         "the values below, then run: uv run import-flags"
-    )); r += 2
+    ))
+    r += 2
 
-    _header(r, "Status values"); r += 1
+    _header(r, "Status values")
+    r += 1
     _row(r, "accepted",
         "The Normalized Suggestion is correct as-is, or you have corrected it to the "
         "right canonical name. The name will be registered and any existing rows with "
-        "the old normalized name will be updated to match."); r += 1
+        "the old normalized name will be updated to match.")
+    r += 1
     _row(r, "mapped",
         "The contest is a renamed or reformatted version of an existing contest. "
         "Fill in Override Target with the canonical name from the 'known_contests' tab. "
         "Existing rows will be updated and future loads of this raw name will map "
-        "automatically."); r += 1
+        "automatically.")
+    r += 1
     _row(r, "ignored",
         "The contest should not be tracked (e.g. a ballot measure). "
-        "The flag is dismissed without registering anything."); r += 1
+        "The flag is dismissed without registering anything.")
+    r += 1
     _row(r, "unreviewed",
-        "Default. Row is skipped on import. Leave this if you are not sure yet."); r += 2
+        "Default. Row is skipped on import. Leave this if you are not sure yet.")
+    r += 2
 
-    _header(r, "Tips"); r += 1
+    _header(r, "Tips")
+    r += 1
     _text(r, (
         "- You can import a partially reviewed file. Unreviewed rows are skipped and "
         "will reappear on the next export."
-    )); r += 1
+    ))
+    r += 1
     _text(r, (
         "- For 'accepted': if the Normalized Suggestion is wrong, correct it directly "
         "in that cell before setting Status to accepted."
-    )); r += 1
+    ))
+    r += 1
     _text(r, (
         "- For 'mapped': copy the exact name from the 'known_contests' tab into the "
         "Override Target column. The name must match exactly."
-    )); r += 1
+    ))
+    r += 1
     _text(r, (
         "- Do not edit Flag ID, Year, or Raw Name columns."
-    )); r += 1
+    ))
+    r += 1
 
     ws.column_dimensions["A"].width = 22
     ws.column_dimensions["B"].width = 55

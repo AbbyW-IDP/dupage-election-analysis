@@ -124,7 +124,7 @@ uv run status
 
 Prints a summary of the current database state:
 
-```
+```bash
 Elections loaded:  4
   2014 General Primary  (2014-03-18)
   2018 General Primary  (2018-03-20)
