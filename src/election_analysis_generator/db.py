@@ -49,7 +49,7 @@ _SCHEMA = """
         year                 INTEGER NOT NULL,
         election_date        TEXT,
         results_last_updated TEXT,
-        summary_file         TEXT NOT NULL UNIQUE,
+        summary_file         TEXT UNIQUE,
         category             TEXT NOT NULL DEFAULT '',
         election_type        TEXT NOT NULL DEFAULT '',
         ballots_cast         INTEGER,
@@ -112,6 +112,7 @@ _SCHEMA = """
     CREATE TABLE IF NOT EXISTS source_files (
         filename            TEXT PRIMARY KEY,
         election_id         INTEGER REFERENCES elections(id),
+        file_type           TEXT NOT NULL DEFAULT 'summary',
         loaded_at           TEXT DEFAULT (datetime('now'))
     );
 
@@ -350,6 +351,53 @@ class ElectionDatabase:
         self._conn.commit()
         return election, new_names
 
+    def insert_election_metadata(self, election: "Election") -> "Election":
+        """Insert an election row with metadata only -- no candidate data.
+
+        Used when summary_file is absent in elections.csv and only turnout
+        figures (registered_voters, ballots_cast) are needed.
+
+        Returns the same Election with its new database id populated.
+        """
+        cur = self._conn.execute(
+            """
+            INSERT INTO elections
+                (name, year, election_date, results_last_updated,
+                 summary_file, category, election_type,
+                 ballots_cast, registered_voters)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                election.name,
+                election.year,
+                election.election_date.isoformat() if election.election_date else None,
+                election.results_last_updated.isoformat()
+                if election.results_last_updated else None,
+                election.summary_file,
+                election.category,
+                election.election_type,
+                election.ballots_cast,
+                election.registered_voters,
+            ),
+        )
+        election_id = cur.lastrowid
+        if election_id is None:
+            raise RuntimeError("INSERT INTO elections failed to return a row id")
+        self._conn.commit()
+        from .models import Election as _Election
+        return _Election(
+            id=election_id,
+            name=election.name,
+            year=election.year,
+            election_date=election.election_date,
+            results_last_updated=election.results_last_updated,
+            summary_file=election.summary_file,
+            category=election.category,
+            election_type=election.election_type,
+            ballots_cast=election.ballots_cast,
+            registered_voters=election.registered_voters,
+        )
+
     def insert_election_with_file(
         self,
         election: Election,
@@ -545,6 +593,8 @@ class ElectionDatabase:
                     return None
             except (TypeError, ValueError):
                 pass
+            if val is None:
+                return None
             return int(val)
 
         params = [
@@ -723,27 +773,58 @@ class ElectionDatabase:
         ).fetchone()
         return row is not None
 
-    def register_file(self, filename: str, election_id: int) -> None:
+    def get_election_coverage(self, election_id: int) -> str:
+        """Return the data coverage label for an election.
+
+        Returns:
+            'turnout_only'         -- no source files loaded
+            'summary'              -- summary CSV loaded, no detail file
+            'summary_and_precinct' -- both summary and precinct detail loaded
+        """
+        rows = self._conn.execute(
+            "SELECT file_type FROM source_files WHERE election_id = ?",
+            (election_id,),
+        ).fetchall()
+        types = {r[0] for r in rows}
+        if not types:
+            return "turnout_only"
+        if "detail" in types:
+            return "summary_and_precinct"
+        return "summary"
+
+    def register_file(
+        self,
+        filename: str,
+        election_id: int,
+        file_type: str = "summary",
+    ) -> None:
         """Mark a file as loaded, linked to the given election.
 
         Called by LoadSummary after a successful load so that subsequent
         sync-sources runs skip this file. INSERT OR IGNORE means calling this
         twice for the same filename is safe.
+
+        Args:
+            filename:    The basename of the source file.
+            election_id: The id of the election it was loaded for.
+            file_type:   One of 'summary', 'detail', or 'metadata'.
         """
         self._conn.execute(
-            "INSERT OR IGNORE INTO source_files (filename, election_id) VALUES (?,?)",
-            (filename, election_id),
+            "INSERT OR IGNORE INTO source_files (filename, election_id, file_type)"
+            " VALUES (?,?,?)",
+            (filename, election_id, file_type),
         )
         self._conn.commit()
 
     def get_loaded_files(self) -> list[dict]:
         """Return all loaded source records as a list of dicts.
 
-        Each dict has keys: filename, election_id, loaded_at. Ordered by
-        load time. Used by the CLI to display what has been loaded and when.
+        Each dict has keys: filename, election_id, file_type, loaded_at.
+        Ordered by load time.
         """
         rows = self._conn.execute(
-            "SELECT filename, election_id, loaded_at FROM source_files ORDER BY loaded_at"
+            "SELECT filename, election_id, file_type, loaded_at"
+            " FROM source_files ORDER BY loaded_at"
         ).fetchall()
         return [dict(r) for r in rows]
 

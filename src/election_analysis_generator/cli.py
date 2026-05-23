@@ -67,8 +67,18 @@ def _print_status(db: ElectionDatabase) -> None:
     print(f"Elections loaded:  {n_elections}")
     for _, row in elections.iterrows():
         date_val = row.get("election_date")
-        date_str = f"  ({date_val})" if pd.notna(date_val) else ""
-        print(f"  {row['name']}{date_str}")
+        date_str = f"  ({date_val})" if date_val is not None else ""
+        election_id = row["id"]
+        if election_id is None:
+            raise AssertionError("election id is None")  # nosec B101
+        coverage = db.get_election_coverage(int(election_id))
+        coverage_labels = {
+            "turnout_only": "[turnout only]",
+            "summary": "[summary]",
+            "summary_and_precinct": "[summary + precinct]",
+        }
+        label = coverage_labels.get(coverage, "")
+        print(f"  {row['name']}{date_str}  {label}")
 
     print()
     if n_flags:
@@ -145,7 +155,11 @@ def sync_sources() -> None:
                 any_flags = False
                 action = "Would load" if args.dry_run else "loaded successfully"
                 for filename, (election_name, new_names) in summary_results.items():
-                    print(f"{prefix}{election_name} ({filename}): {action}")
+                    is_metadata = filename == election_name  # metadata sentinel key
+                    if is_metadata:
+                        print(f"{prefix}{election_name}: loaded (turnout numbers only)")
+                    else:
+                        print(f"{prefix}{election_name} ({filename}): {action}")
                     if new_names:
                         any_flags = True
                         print(f"  [!] {len(new_names)} unrecognized contest name(s):")
@@ -230,14 +244,14 @@ def generate_analysis() -> None:
         try:
             pct_change = analyzer.pct_change_by_party(recent_a, recent_b)
         except ValueError as e:
-            print(f"  Warning: {e}")
+            print(f"  Warning [pct change by party]: {e}")
             pct_change = None
 
         print("Running party_share across all elections")
         try:
             share = analyzer.party_share(*names)
         except ValueError as e:
-            print(f"  Warning: {e}")
+            print(f"  Warning [party share]: {e}")
             share = None
 
         print("Running turnout across all elections")

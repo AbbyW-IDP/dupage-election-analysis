@@ -74,7 +74,7 @@ _NO_CANDIDATE_MARKERS = frozenset(
 # elections.csv column names
 # ---------------------------------------------------------------------------
 # Required columns in elections.csv.
-_CONFIG_REQUIRED = frozenset({"year", "election_date", "summary_file"})
+_CONFIG_REQUIRED = frozenset({"year", "election_date"})
 
 # Optional columns and their coercion functions.
 # Absent columns and blank cells both produce None.
@@ -266,10 +266,11 @@ def load_elections_config(config_path: Path = DEFAULT_CONFIG_PATH) -> list[dict]
                 f"Row {int(row_index) + 1}: 'election_date' is required and must not be blank."  # type: ignore[arg-type]
             )
 
+        summary_file_raw = str(row.get("summary_file", "")).strip()
         entry: dict = {
             "year":          year_val,
             "election_date": election_date_raw,
-            "summary_file":  str(row["summary_file"]).strip(),
+            "summary_file":  summary_file_raw if summary_file_raw else None,
         }
 
         for col, coerce_fn in _CONFIG_OPTIONAL.items():
@@ -348,13 +349,26 @@ class LoadSummary(_LoaderBase):
         results: dict[str, tuple[str, list[str]]] = {}
         for entry in configs:
             filename = entry["summary_file"]
+
+            # Turnout-only election: no summary file configured
+            if filename is None:
+                existing = self._db.get_election_by_name(entry["name"])
+                if existing is not None:
+                    continue
+                if not dry_run:
+                    self._load_metadata_only(entry)
+                    results[entry["name"]] = (entry["name"], [])
+                else:
+                    results[entry["name"]] = (entry["name"], [])
+                continue
+
             if self._db.is_file_loaded(filename):
                 continue
 
             existing = self._db.get_election_by_name(entry["name"])
             if existing is not None:
                 if not dry_run and existing.id is not None:
-                    self._db.register_file(filename, existing.id)
+                    self._db.register_file(filename, existing.id, file_type="summary")
                 continue
 
             path = sources_dir / filename
@@ -370,6 +384,39 @@ class LoadSummary(_LoaderBase):
                 results[filename] = (election.name, new_names)
 
         return results
+
+    def _load_metadata_only(self, entry: dict) -> None:
+        """Insert an election with metadata only -- no candidate data.
+
+        Called when summary_file is absent in elections.csv. The election
+        is inserted into the elections table with turnout figures only
+        (registered_voters, ballots_cast). No contest or candidate rows
+        are created. A sentinel entry is written to source_files with
+        file_type='metadata' so is_file_loaded checks work correctly on
+        re-sync.
+        """
+        from .models import Election
+        election_date = _parse_date(entry["election_date"])
+        election = Election(
+            id=None,
+            name=entry["name"],
+            year=entry["year"],
+            election_date=election_date,
+            results_last_updated=None,
+            summary_file=None,
+            category=entry.get("category") or "",
+            election_type=entry.get("election_type") or "",
+            ballots_cast=entry.get("ballots_cast"),
+            registered_voters=entry.get("registered_voters"),
+        )
+        inserted = self._db.insert_election_metadata(election)
+        if inserted.id is not None:
+            # Sentinel so re-sync skips this election
+            self._db.register_file(
+                f"__metadata__{entry['name']}",
+                inserted.id,
+                file_type="metadata",
+            )
 
     def load_csv(
         self,
@@ -519,7 +566,7 @@ class LoadPrecinctDetail(_LoaderBase):
         for sheet_name, sheet_rows in _iter_excel_sheets(path):
             self._process_sheet(sheet_rows, election.id, contest_id_map, sheet_name)
 
-        self._db.register_file(path.name, election.id)
+        self._db.register_file(path.name, election.id, file_type="detail")
 
     def _build_contest_id_map(self) -> dict[str, int]:
         df = self._db.query("SELECT id, contest_name FROM contests")

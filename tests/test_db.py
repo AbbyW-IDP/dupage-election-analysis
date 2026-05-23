@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from src.election_analysis_generator.db import ElectionDatabase, DEFAULT_DB_PATH, _placeholders
+from src.election_analysis_generator.analysis import ElectionAnalyzer
 from src.election_analysis_generator.models import Election
 from tests.conftest import make_candidates_df, seed_election
 
@@ -1342,3 +1343,131 @@ class TestInsertCandidatesRefactor:
         db.insert_election(sample_election, df)
         count = db.query("SELECT COUNT(*) AS n FROM contest_results").iloc[0]["n"]
         assert count == n
+
+
+class TestTurnoutOnlyElections:
+    """Tests for elections loaded with metadata only (no summary CSV)."""
+
+    def test_insert_election_with_no_summary_file(self, db):
+        """An election can be inserted with summary_file=None."""
+        # Arrange
+        election = Election(
+            id=None,
+            name="2025 consolidated",
+            year=2025,
+            election_date=date(2025, 4, 1),
+            results_last_updated=None,
+            summary_file=None,
+            category="Consolidated",
+            election_type="midterm",
+            registered_voters=636822,
+            ballots_cast=50000,
+        )
+
+        # Act
+        inserted = db.insert_election_metadata(election)
+
+        # Assert
+        assert inserted.id is not None
+        assert inserted.summary_file is None
+
+    def test_turnout_only_election_appears_in_list_elections(self, db):
+        """A metadata-only election is returned by list_elections()."""
+        # Arrange
+        from src.election_analysis_generator.models import Election
+        election = Election(
+            id=None, name="2025 consolidated", year=2025,
+            election_date=date(2025, 4, 1), results_last_updated=None,
+            summary_file=None, category="Consolidated", election_type="midterm",
+            registered_voters=636822, ballots_cast=50000,
+        )
+        db.insert_election_metadata(election)
+
+        # Act
+        analyzer = ElectionAnalyzer(db)
+        elections = analyzer.list_elections()
+
+        # Assert
+        assert "2025 consolidated" in elections["name"].tolist()
+
+    def test_turnout_works_for_metadata_only_election(self, db):
+        """turnout() returns correct figures for a metadata-only election."""
+        # Arrange
+        from src.election_analysis_generator.models import Election
+        from src.election_analysis_generator.analysis import ElectionAnalyzer
+        election = Election(
+            id=None, name="2025 consolidated", year=2025,
+            election_date=date(2025, 4, 1), results_last_updated=None,
+            summary_file=None, category="Consolidated", election_type="midterm",
+            registered_voters=636822, ballots_cast=50000,
+        )
+        db.insert_election_metadata(election)
+
+        # Act
+        analyzer = ElectionAnalyzer(db)
+        result = analyzer.turnout()
+
+        # Assert
+        assert result.loc["Registered", "2025 consolidated"] == 636822
+        assert result.loc["Ballots Cast", "2025 consolidated"] == 50000
+
+    def test_register_file_with_file_type(self, db):
+        """register_file accepts a file_type parameter."""
+        # Arrange
+        election = seed_election(db, "2022 General Primary", 2022, [{}],
+            election_date=date(2022, 6, 28))
+
+        # Act
+        db.register_file("2022-general-primary.csv", election.id, file_type="summary")
+        db.register_file("2022-general-precinct.xlsx", election.id, file_type="detail")
+
+        # Assert
+        files = db.get_loaded_files()
+        types = {f["filename"]: f["file_type"] for f in files}
+        assert types["2022-general-primary.csv"] == "summary"
+        assert types["2022-general-precinct.xlsx"] == "detail"
+
+    def test_get_election_coverage_turnout_only(self, db):
+        """get_election_coverage returns 'turnout_only' when no files registered."""
+        # Arrange
+        from src.election_analysis_generator.models import Election
+        election = Election(
+            id=None, name="2025 consolidated", year=2025,
+            election_date=date(2025, 4, 1), results_last_updated=None,
+            summary_file=None, category="Consolidated", election_type="midterm",
+            registered_voters=636822, ballots_cast=50000,
+        )
+        inserted = db.insert_election_metadata(election)
+
+        # Act
+        coverage = db.get_election_coverage(inserted.id)
+
+        # Assert
+        assert coverage == "turnout_only"
+
+    def test_get_election_coverage_summary(self, db):
+        """get_election_coverage returns 'summary' when only summary file loaded."""
+        # Arrange
+        election = seed_election(db, "2022 General Primary", 2022, [{}],
+            election_date=date(2022, 6, 28))
+        db.register_file("2022-general-primary.csv", election.id, file_type="summary")
+
+        # Act
+        coverage = db.get_election_coverage(election.id)
+
+        # Assert
+        assert coverage == "summary"
+
+    def test_get_election_coverage_summary_and_precinct(self, db):
+        """get_election_coverage returns 'summary_and_precinct' when both loaded."""
+        # Arrange
+        election = seed_election(db, "2022 General Primary", 2022, [{}],
+            election_date=date(2022, 6, 28))
+        db.register_file("2022-general-primary.csv", election.id, file_type="summary")
+        db.register_file("2022-general-precinct.xlsx", election.id, file_type="detail")
+
+        # Act
+        coverage = db.get_election_coverage(election.id)
+
+        # Assert
+        assert coverage == "summary_and_precinct"

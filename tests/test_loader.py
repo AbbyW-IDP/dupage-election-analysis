@@ -216,11 +216,13 @@ class TestLoadElectionsConfig:
         with pytest.raises(ValueError, match="election_date"):
             load_elections_config(p)
 
-    def test_raises_when_summary_file_column_missing(self, tmp_path):
+    def test_loads_election_without_summary_file_column(self, tmp_path):
+        """summary_file is now optional; omitting it produces a valid config."""
         p = tmp_path / "elections.csv"
-        p.write_text("year,election_date\n2026,2026-03-17\n")
-        with pytest.raises(ValueError, match="summary_file"):
-            load_elections_config(p)
+        p.write_text("name,year,election_date\n2026 General Primary,2026,2026-03-17\n")
+        configs = load_elections_config(p)
+        assert len(configs) == 1
+        assert configs[0]["summary_file"] is None
 
     def test_raises_on_invalid_category(self, tmp_path):
         csv = write_config_csv(
