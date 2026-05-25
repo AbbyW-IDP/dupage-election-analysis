@@ -399,3 +399,17 @@ class TestNormalizeCandidateName:
         }
         assert normalize_candidate_name("ROB BLAGOJEVICH", custom) == "ROD BLAGOJEVICH"
         assert normalize_candidate_name("JB PRITZER", custom) == "JB PRITZKER"
+
+
+class TestNormalizeIdempotency:
+    @pytest.mark.parametrize("raw", [
+        pytest.param("FOR ATTORNEY GENERAL (Vote For 1)",                    id="vote_for"),
+        pytest.param("Judge of the Circuit Court, 18th Judicial Circuit - D", id="ordinal_party"),
+        pytest.param("FOR STATE SENATOR - R*",                                id="party_star"),
+        pytest.param("FOR REPRESENTATIVE IN CONGRESS 7TH CONGRESSIONAL DISTRICT", id="abbreviated_ordinal"),
+        pytest.param("FOR JUDGE OF THE CIRCUIT COURT (To fill the vacancy of the Honorable Jane Smith) (Vote For 1)", id="vacancy"),
+    ])
+    def test_idempotent(self, raw):
+        once = normalize_contest_name(raw)
+        twice = normalize_contest_name(once)
+        assert once == twice

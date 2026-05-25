@@ -562,9 +562,18 @@ class LoadPrecinctDetail(_LoaderBase):
             )
 
         contest_id_map = self._build_contest_id_map()
+        known = self._db.get_known_contest_names()
+        unmatched: list[tuple[str, str]] = []
 
         for sheet_name, sheet_rows in _iter_excel_sheets(path):
-            self._process_sheet(sheet_rows, election.id, contest_id_map, sheet_name)
+            result = self._process_sheet(sheet_rows, election.id, contest_id_map, sheet_name)
+            if result is not None:
+                unmatched.append(result)
+
+        if unmatched:
+            flag_df = pd.DataFrame(unmatched, columns=["contest_name_raw", "contest_name"])
+            self._db._write_flags(flag_df, election.year, known)
+            self._db._conn.commit()
 
         self._db.register_file(path.name, election.id, file_type="detail")
 
@@ -578,18 +587,19 @@ class LoadPrecinctDetail(_LoaderBase):
         election_id: int,
         contest_id_map: dict[str, int],
         sheet_name: str,
-    ) -> None:
+    ) -> tuple[str, str] | None:
         if len(rows) < 4:
-            return
+            return None
 
         raw_contest = str(rows[0][0] or "").strip()
         if not raw_contest:
-            return
+            return None
 
-        normalized_contest = normalize_contest_name(raw_contest)
-        contest_id = contest_id_map.get(normalized_contest)
+        overrides = self._db.get_overrides()
+        canonical = overrides.get(raw_contest) or normalize_contest_name(raw_contest)
+        contest_id = contest_id_map.get(canonical)
         if contest_id is None:
-            return
+            return (raw_contest, canonical)
 
         candidate_names: list[str] = []
         candidate_start_cols: list[int] = []
@@ -607,7 +617,7 @@ class LoadPrecinctDetail(_LoaderBase):
             col += 5
 
         if not candidate_names:
-            return
+            return None
 
         precinct_rows_to_insert: list[dict] = []
         for data_row in rows[3:]:
@@ -648,7 +658,7 @@ class LoadPrecinctDetail(_LoaderBase):
                 )
 
         if not precinct_rows_to_insert:
-            return
+            return None
 
         self._db.insert_precinct_results(precinct_rows_to_insert)
 

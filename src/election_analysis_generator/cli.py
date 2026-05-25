@@ -188,6 +188,41 @@ def sync_sources() -> None:
                     print(f"  {election.name} ({filename}): loaded")
 
 
+def load_detail() -> None:
+    """Load precinct-detail Excel files defined in elections.csv."""
+    parser = argparse.ArgumentParser(
+        description="Load any new precinct-detail Excel files defined in elections.csv."
+    )
+    parser.add_argument(
+        "sources_dir",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_SOURCES_DIR,
+        help=f"Directory containing source files (default: {DEFAULT_SOURCES_DIR})",
+    )
+    parser.add_argument(
+        "config_path",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help=f"Path to elections.csv (default: {DEFAULT_CONFIG_PATH})",
+    )
+    args = parser.parse_args()
+
+    with ElectionDatabase(DEFAULT_DB_PATH) as db:
+        print(f"Scanning {args.config_path} for new detail files...")
+        results = LoadPrecinctDetail(db).sync(
+            sources_dir=args.sources_dir,
+            config_path=args.config_path,
+        )
+
+    if not results:
+        print("No new detail files found.")
+    else:
+        for filename, election in results.items():
+            print(f"  {election.name} ({filename}): loaded")
+
+
 DEFAULT_OUTPUT = Path("election_analysis.xlsx")
 
 
