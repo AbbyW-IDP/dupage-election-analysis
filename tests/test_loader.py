@@ -716,8 +716,7 @@ class TestSuggestContestName:
 def _write_detail_excel(path: Path, contest_name: str, candidate: str = "Jane Smith") -> None:
     """Write a minimal .xlsx detail file with one sheet."""
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Sheet1"
+    ws = wb.worksheets[0]
     # Row 1 (rows[0]): contest name in col A
     ws.cell(row=1, column=1, value=contest_name)
     # Row 2 (rows[1]): candidate name in col C (tuple index 2)

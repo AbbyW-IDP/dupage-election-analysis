@@ -1071,7 +1071,7 @@ class ElectionDatabase:
                 "SELECT contest_name_raw FROM contest_flags WHERE resolved = 0"
             ).fetchall()
         }
-        flag_df = flag_df[~flag_df["contest_name_raw"].isin(existing_raws)]
+        flag_df = flag_df[~flag_df["contest_name_raw"].isin(list(existing_raws))]  # type: ignore[union-attr]
         flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(  # type: ignore[union-attr]
             index=False
         )
