@@ -79,7 +79,7 @@ def _make_xlsx(
     """Write a minimal flags_review.xlsx with the given flag rows."""
     path = tmp_path / "flags_review.xlsx"
     wb = openpyxl.Workbook()
-    ws = wb.active
+    ws = wb.worksheets[0]
     ws.title = "flags"
     ws.append([
         "Flag ID", "Year", "Raw Name", "Normalized Suggestion",
@@ -472,7 +472,7 @@ class TestImportFlagsErrors:
         # Arrange
         path = tmp_path / "bad.xlsx"
         wb = openpyxl.Workbook()
-        ws = wb.active
+        ws = wb.worksheets[0]
         ws.title = "flags"
         ws.append(["Wrong Column"])
         wb.save(path)

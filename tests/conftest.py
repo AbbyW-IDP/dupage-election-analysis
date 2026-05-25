@@ -117,18 +117,19 @@ def seed_election(
         normalized = normalize_contest_name(raw)
         db.register_contest_name(normalized, year)
 
+    summary_filename = f"{name.lower().replace(' ', '-')}.csv"
     election = Election(
         id=None,
         name=name,
         year=year,
         election_date=election_date,
         results_last_updated=None,
-        summary_file=f"{name.lower().replace(' ', '-')}.csv",
+        summary_file=summary_filename,
         category=category,
         election_type=election_type,
         ballots_cast=ballots_cast,
         registered_voters=registered_voters,
     )
-    election, _ = db.insert_election_with_file(election, df, election.summary_file)
+    election, _ = db.insert_election_with_file(election, df, summary_filename)
     assert election.id is not None, "election must have an id after insert"  # nosec B101
     return election
