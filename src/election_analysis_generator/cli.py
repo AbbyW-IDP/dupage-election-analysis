@@ -71,8 +71,7 @@ def _print_status(db: ElectionDatabase) -> None:
         election_id = row["id"]
         if election_id is None:
             raise AssertionError("election id is None")  # nosec B101
-        if not isinstance(election_id, int):
-            raise TypeError(f"election_id must be an int, got {type(election_id)}")
+        election_id = int(election_id)
         coverage = db.get_election_coverage(election_id)  
         coverage_labels = {
             "turnout_only": "[turnout only]",

@@ -786,7 +786,7 @@ class ElectionDatabase:
             (election_id,),
         ).fetchall()
         types = {r[0] for r in rows}
-        if not types:
+        if not types or types <= {"metadata"}:
             return "turnout_only"
         if "detail" in types:
             return "summary_and_precinct"
@@ -1062,6 +1062,16 @@ class ElectionDatabase:
             self._suggest_contest_name(n, known)
             for n in flag_df["contest_name"]
         ]
+        # Skip raw names already flagged and unresolved to prevent duplicates.
+        # contest_flags has no UNIQUE constraint (for historical compatibility),
+        # so deduplication is done here rather than with INSERT OR IGNORE.
+        existing_raws: set[str] = {
+            r[0]
+            for r in self._conn.execute(
+                "SELECT contest_name_raw FROM contest_flags WHERE resolved = 0"
+            ).fetchall()
+        }
+        flag_df = flag_df[~flag_df["contest_name_raw"].isin(existing_raws)]
         flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(  # type: ignore[union-attr]
             index=False
         )
