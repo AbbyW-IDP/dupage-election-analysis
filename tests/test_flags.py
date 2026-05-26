@@ -499,3 +499,30 @@ def test_contest_flags_has_source_columns(tmp_path):
     assert "source_file" in cols
     assert "source_tab" in cols
     assert "source_row" in cols
+
+
+def test_write_flags_stores_source_info(tmp_path):
+    import pandas as pd
+
+    db_path = tmp_path / "test.db"
+    with ElectionDatabase(db_path) as db:
+        df = pd.DataFrame(
+            {
+                "contest_name_raw": ["RAW CONTEST A", "RAW CONTEST A"],
+                "contest_name": ["raw contest a", "raw contest a"],
+            }
+        )
+        # index 0 and 1 -> first occurrence of "RAW CONTEST A" is index 0 -> row = 0 + 2 = 2
+        db._write_flags(
+            df,
+            year=2024,
+            known=set(),
+            source_file="results.csv",
+            source_tab=None,
+        )
+        row = db._conn.execute(
+            "SELECT source_file, source_tab, source_row FROM contest_flags"
+        ).fetchone()
+    assert row["source_file"] == "results.csv"
+    assert row["source_tab"] is None
+    assert row["source_row"] == 2

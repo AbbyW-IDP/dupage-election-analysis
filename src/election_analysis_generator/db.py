@@ -1039,16 +1039,23 @@ class ElectionDatabase:
 
         return normalized
 
-    def _write_flags(self, df: pd.DataFrame, year: int, known: set[str]) -> None:
+    def _write_flags(
+        self,
+        df: pd.DataFrame,
+        year: int,
+        known: set[str],
+        source_file: str | None = None,
+        source_tab: str | None = None,
+    ) -> None:
         """Insert flag rows for all unique contest names in df.
 
         Called internally by _upsert_contests() for the subset of names that
         weren't in the known set. Each unique (contest_name_raw, contest_name)
         pair becomes one flag row. The guard on df.empty means callers don't
-        need to check before calling — writing zero flags is a no-op.
+        need to check before calling -- writing zero flags is a no-op.
 
-        ``known`` must be the set captured at the *start* of the load — before
-        any new names were registered — so that _suggest_contest_name() matches
+        ``known`` must be the set captured at the *start* of the load -- before
+        any new names were registered -- so that _suggest_contest_name() matches
         against the pre-load registry rather than the just-expanded one.
 
         The contest_name stored in the flag is passed through
@@ -1056,15 +1063,27 @@ class ElectionDatabase:
         match in the registry. This means the "Normalized Suggestion" the
         reviewer sees is a registry name when a close match exists, rather than
         the raw normalized string which may differ only slightly.
+
+        ``source_file``, ``source_tab``, and ``source_row`` record where in the
+        input file each flag originated. source_row is 1-based with a header
+        offset of 1 (i.e. df index 0 -> row 2).
         """
         if df.empty:
             return
+        first_row: dict[str, int] = (
+            df.groupby("contest_name_raw", sort=False)
+            .apply(lambda g: int(g.index.min()) + 2)
+            .to_dict()
+        )
         flag_df = df[["contest_name_raw", "contest_name"]].drop_duplicates().copy()
         flag_df["year"] = year
         flag_df["contest_name"] = [
             self._suggest_contest_name(n, known)
             for n in flag_df["contest_name"]
         ]
+        flag_df["source_file"] = source_file
+        flag_df["source_tab"] = source_tab
+        flag_df["source_row"] = flag_df["contest_name_raw"].map(first_row)
         # Skip raw names already flagged and unresolved to prevent duplicates.
         # contest_flags has no UNIQUE constraint (for historical compatibility),
         # so deduplication is done here rather than with INSERT OR IGNORE.
@@ -1075,11 +1094,13 @@ class ElectionDatabase:
             ).fetchall()
         }
         flag_df = flag_df[~flag_df["contest_name_raw"].isin(list(existing_raws))]  # type: ignore[union-attr]
-        flag_rows = flag_df[["year", "contest_name_raw", "contest_name"]].itertuples(  # type: ignore[union-attr]
-            index=False
-        )
+        flag_rows = flag_df[  # type: ignore[union-attr]
+            ["year", "contest_name_raw", "contest_name", "source_file", "source_tab", "source_row"]
+        ].itertuples(index=False)
         self._conn.executemany(
-            "INSERT INTO contest_flags (year, contest_name_raw, contest_name) VALUES (?,?,?)",
+            """INSERT INTO contest_flags
+               (year, contest_name_raw, contest_name, source_file, source_tab, source_row)
+               VALUES (?,?,?,?,?,?)""",
             flag_rows,
         )
 
