@@ -480,3 +480,22 @@ class TestImportFlagsErrors:
         # Act / Assert
         with pytest.raises(ValueError, match="Missing columns"):
             import_flags(db, path)
+
+
+# ---------------------------------------------------------------------------
+# Schema migration
+# ---------------------------------------------------------------------------
+
+
+def test_contest_flags_has_source_columns(tmp_path):
+    db_path = tmp_path / "test.db"
+    with ElectionDatabase(db_path) as db:
+        cols = {
+            row[1]
+            for row in db._conn.execute(
+                "PRAGMA table_info(contest_flags)"
+            ).fetchall()
+        }
+    assert "source_file" in cols
+    assert "source_tab" in cols
+    assert "source_row" in cols

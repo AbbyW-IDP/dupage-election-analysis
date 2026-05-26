@@ -207,6 +207,18 @@ class ElectionDatabase:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._create_schema()
+        for col, typedef in [
+            ("source_file", "TEXT"),
+            ("source_tab",  "TEXT"),
+            ("source_row",  "INTEGER"),
+        ]:
+            try:
+                self._conn.execute(
+                    f"ALTER TABLE contest_flags ADD COLUMN {col} {typedef}"
+                )
+            except Exception:
+                pass  # column already exists
+        self._conn.commit()
 
     def __enter__(self) -> "ElectionDatabase":
         return self
