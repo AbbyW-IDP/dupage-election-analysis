@@ -528,6 +528,40 @@ def test_write_flags_stores_source_info(tmp_path):
     assert row["source_row"] == 2
 
 
+def test_csv_load_stores_source_file_in_flags(tmp_path):
+    import pandas as pd
+    from election_analysis_generator.models import Election
+    from datetime import date
+
+    db_path = tmp_path / "test.db"
+
+    df = pd.DataFrame({
+        "contest_name_raw": ["BRAND NEW CONTEST"],
+        "choice_name": ["Candidate A"],
+        "party": ["DEM"],
+        "total_votes": [100],
+    })
+
+    election = Election(
+        id=None,
+        name="2024 Test",
+        year=2024,
+        election_date=date(2024, 11, 5),
+        category="general",
+        election_type="presidential",
+        summary_file="results.csv",
+    )
+
+    with ElectionDatabase(db_path) as db:
+        db.insert_election_with_file(election, df, "results.csv")
+        flags = db.get_unresolved_flags()
+
+    assert len(flags) == 1
+    assert flags[0]["source_file"] == "results.csv"
+    assert flags[0]["source_tab"] is None
+    assert flags[0]["source_row"] == 2
+
+
 def test_resolve_flag_by_raw_name(tmp_path):
     db_path = tmp_path / "test.db"
     with ElectionDatabase(db_path) as db:

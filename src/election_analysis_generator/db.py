@@ -270,7 +270,10 @@ class ElectionDatabase:
     # ------------------------------------------------------------------
 
     def insert_election(
-        self, election: Election, df: pd.DataFrame
+        self,
+        election: Election,
+        df: pd.DataFrame,
+        source_file: str | None = None,
     ) -> tuple[Election, list[str]]:
         """
         Insert an Election and all its results from a normalized DataFrame.
@@ -346,7 +349,7 @@ class ElectionDatabase:
         known = self.get_known_contest_names()
         normalized_df = self._normalize_df(df, self.get_overrides())
         normalized_df = self._apply_for_prefix_remapping(normalized_df, known)
-        new_names = self._upsert_contests(normalized_df, election.year, known)
+        new_names = self._upsert_contests(normalized_df, election.year, known, source_file=source_file)
         self._insert_candidates(
             normalized_df, election_id, election.name, election.year
         )
@@ -421,7 +424,7 @@ class ElectionDatabase:
         Returns:
             Same tuple as insert_election: (election_with_id, new_names).
         """
-        election, new_names = self.insert_election(election, df)
+        election, new_names = self.insert_election(election, df, source_file=filename)
         if election.id is None:
             raise RuntimeError("insert_election did not return an election id")
         self.register_file(filename, election.id)
@@ -485,6 +488,7 @@ class ElectionDatabase:
         df: pd.DataFrame,
         year: int,
         known: set[str],
+        source_file: str | None = None,
     ) -> list[str]:
         """
         Register all unique contest names from df, flagging any that are new.
@@ -521,7 +525,7 @@ class ElectionDatabase:
 
         if new_names:
             flagged_rows: pd.DataFrame = df[df["contest_name"].isin(new_names)]  # type: ignore[assignment]
-            self._write_flags(flagged_rows, year, known)
+            self._write_flags(flagged_rows, year, known, source_file=source_file)
 
         return sorted(new_names)
 
@@ -981,7 +985,8 @@ class ElectionDatabase:
         export_flags() (spreadsheet export) in flags.py.
         """
         rows = self._conn.execute("""
-            SELECT id, year, contest_name_raw, contest_name
+            SELECT id, year, contest_name_raw, contest_name,
+                   source_file, source_tab, source_row
             FROM contest_flags
             WHERE resolved = 0
             ORDER BY year, contest_name
