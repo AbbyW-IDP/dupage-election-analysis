@@ -526,3 +526,17 @@ def test_write_flags_stores_source_info(tmp_path):
     assert row["source_file"] == "results.csv"
     assert row["source_tab"] is None
     assert row["source_row"] == 2
+
+
+def test_resolve_flag_by_raw_name(tmp_path):
+    db_path = tmp_path / "test.db"
+    with ElectionDatabase(db_path) as db:
+        db._conn.execute(
+            "INSERT INTO contest_flags (year, contest_name_raw, contest_name) VALUES (?,?,?)",
+            (2024, "RAW A", "raw a"),
+        )
+        db._conn.commit()
+        db.resolve_flag_by_raw_name("RAW A")
+        db._conn.commit()
+        remaining = db.get_unresolved_flags()
+    assert remaining == []

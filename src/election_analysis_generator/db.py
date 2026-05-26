@@ -1001,6 +1001,17 @@ class ElectionDatabase:
             "UPDATE contest_flags SET resolved = 1 WHERE id = ?", (flag_id,)
         )
 
+    def resolve_flag_by_raw_name(self, raw_name: str) -> None:
+        """Mark all unresolved flags for raw_name as resolved.
+
+        Called by import_flags() when resolving by raw name instead of ID.
+        Does not commit -- the caller is responsible for committing.
+        """
+        self._conn.execute(
+            "UPDATE contest_flags SET resolved = 1 WHERE contest_name_raw = ? AND resolved = 0",
+            (raw_name,),
+        )
+
     def _suggest_contest_name(self, normalized: str, known: set[str]) -> str:
         """Return the best match for *normalized* from the registry, or *normalized* itself.
 
