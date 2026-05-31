@@ -577,6 +577,7 @@ class LoadPrecinctDetail(_LoaderBase):
                     known,
                     source_file=path.name,
                     source_tab=sheet_name,
+                    source_row=1,
                 )
 
         self._db._conn.commit()

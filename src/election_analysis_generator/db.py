@@ -1062,6 +1062,7 @@ class ElectionDatabase:
         known: set[str],
         source_file: str | None = None,
         source_tab: str | None = None,
+        source_row: int | None = None,
     ) -> None:
         """Insert flag rows for all unique contest names in df.
 
@@ -1086,11 +1087,17 @@ class ElectionDatabase:
         """
         if df.empty:
             return
-        first_row: dict[str, int] = (
-            df.groupby("contest_name_raw", sort=False)
-            .apply(lambda g: int(g.index.min()) + 2)
-            .to_dict()
-        )
+        if source_row is not None:
+            first_row: dict[str, int] = {
+                raw: source_row
+                for raw in df["contest_name_raw"].unique()
+            }
+        else:
+            first_row = (
+                df.groupby("contest_name_raw", sort=False)
+                .apply(lambda g: int(g.index.min()) + 2)
+                .to_dict()
+            )
         flag_df = pd.DataFrame(df[["contest_name_raw", "contest_name"]].drop_duplicates())
         flag_df["year"] = year
         flag_df["contest_name"] = [
