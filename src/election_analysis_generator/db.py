@@ -1091,7 +1091,7 @@ class ElectionDatabase:
             .apply(lambda g: int(g.index.min()) + 2)
             .to_dict()
         )
-        flag_df = df[["contest_name_raw", "contest_name"]].drop_duplicates().copy()
+        flag_df = pd.DataFrame(df[["contest_name_raw", "contest_name"]].drop_duplicates())
         flag_df["year"] = year
         flag_df["contest_name"] = [
             self._suggest_contest_name(n, known)
@@ -1099,7 +1099,7 @@ class ElectionDatabase:
         ]
         flag_df["source_file"] = source_file
         flag_df["source_tab"] = source_tab
-        flag_df["source_row"] = flag_df["contest_name_raw"].map(first_row)
+        flag_df["source_row"] = flag_df["contest_name_raw"].map(first_row)  # type: ignore[arg-type]
         # Skip raw names already flagged and unresolved to prevent duplicates.
         # contest_flags has no UNIQUE constraint (for historical compatibility),
         # so deduplication is done here rather than with INSERT OR IGNORE.
@@ -1109,8 +1109,10 @@ class ElectionDatabase:
                 "SELECT contest_name_raw FROM contest_flags WHERE resolved = 0"
             ).fetchall()
         }
-        flag_df = flag_df[~flag_df["contest_name_raw"].isin(list(existing_raws))]  # type: ignore[union-attr]
-        flag_rows = flag_df[  # type: ignore[union-attr]
+        flag_df = pd.DataFrame(
+            flag_df[~flag_df["contest_name_raw"].isin(list(existing_raws))]
+        )
+        flag_rows = flag_df[
             ["year", "contest_name_raw", "contest_name", "source_file", "source_tab", "source_row"]
         ].itertuples(index=False)
         self._conn.executemany(
