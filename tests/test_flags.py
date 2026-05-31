@@ -562,6 +562,58 @@ def test_csv_load_stores_source_file_in_flags(tmp_path):
     assert flags[0]["source_row"] == 2
 
 
+def test_excel_load_stores_source_tab_in_flags(tmp_path):
+    import openpyxl
+    from src.election_analysis_generator.loader import LoadSummary, LoadPrecinctDetail
+
+    db_path = tmp_path / "test.db"
+
+    _CONTEST_UNRECOGNIZED = "SOME TOTALLY UNKNOWN CONTEST (Vote For 1)"
+    _CANDIDATE = "Jane Smith"
+    _CONTEST_KNOWN = "FOR GOVERNOR (Vote For 1)"
+
+    CSV_HEADER = (
+        "line number,contest name,choice name,party name,"
+        "total votes,percent of votes,registered voters,ballots cast,"
+        "num Precinct total,num Precinct rptg,over votes,under votes"
+    )
+
+    with ElectionDatabase(db_path) as db:
+        # Seed a summary election so we have a valid election.id
+        csv_path = tmp_path / "2026-general-primary.csv"
+        csv_path.write_text(
+            CSV_HEADER + "\n"
+            f"1,{_CONTEST_KNOWN},{_CANDIDATE},D,5000,100.0,50000,10000,10,10,0,0\n"
+        )
+        config = {
+            "name": "2026 General Primary",
+            "year": 2026,
+            "summary_file": csv_path.name,
+            "election_date": "2026-04-07",
+        }
+        election, _ = LoadSummary(db).load_csv(csv_path, config)
+
+        # Build a .xlsx with one sheet named "DEM GOVERNOR" containing
+        # a contest name that is NOT in the registry -- this will produce a flag.
+        xlsx_path = tmp_path / "detail.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "DEM GOVERNOR"
+        ws.append([_CONTEST_UNRECOGNIZED])
+        ws.append([None, None, _CANDIDATE])
+        ws.append([])
+        ws.append(["Addison 001", 1200, 50, 100, 300, 10, 460])
+        wb.save(xlsx_path)
+
+        LoadPrecinctDetail(db).load_detail_excel(xlsx_path, election)
+
+        flags = db.get_unresolved_flags()
+
+    xlsx_flags = [f for f in flags if f["source_file"] == xlsx_path.name]
+    assert len(xlsx_flags) == 1
+    assert xlsx_flags[0]["source_tab"] == "DEM GOVERNOR"
+
+
 def test_resolve_flag_by_raw_name(tmp_path):
     db_path = tmp_path / "test.db"
     with ElectionDatabase(db_path) as db:

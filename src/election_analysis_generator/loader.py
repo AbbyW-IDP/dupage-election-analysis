@@ -44,7 +44,7 @@ DEFAULT_SOURCES_DIR = Path("sources")
 DEFAULT_CONFIG_PATH = Path("elections.csv")
 
 VALID_CATEGORIES = frozenset(
-    {"consolidated", "consolidated primary", "general", "general primary"}
+    {"consolidated", "consolidated primary", "consolidated general", "general", "general primary"}
 )
 VALID_ELECTION_TYPES = frozenset({"presidential", "midterm", "off-year"})
 
@@ -563,18 +563,23 @@ class LoadPrecinctDetail(_LoaderBase):
 
         contest_id_map = self._build_contest_id_map()
         known = self._db.get_known_contest_names()
-        unmatched: list[tuple[str, str]] = []
 
         for sheet_name, sheet_rows in _iter_excel_sheets(path):
             result = self._process_sheet(sheet_rows, election.id, contest_id_map, sheet_name)
             if result is not None:
-                unmatched.append(result)
+                raw_name, norm_name = result
+                flag_df = pd.DataFrame(
+                    [{"contest_name_raw": raw_name, "contest_name": norm_name}]
+                )
+                self._db._write_flags(
+                    flag_df,
+                    election.year,
+                    known,
+                    source_file=path.name,
+                    source_tab=sheet_name,
+                )
 
-        if unmatched:
-            flag_df = pd.DataFrame(unmatched, columns=["contest_name_raw", "contest_name"])
-            self._db._write_flags(flag_df, election.year, known)
-            self._db._conn.commit()
-
+        self._db._conn.commit()
         self._db.register_file(path.name, election.id, file_type="detail")
 
     def _build_contest_id_map(self) -> dict[str, int]:
