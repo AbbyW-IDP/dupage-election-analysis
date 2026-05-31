@@ -1445,6 +1445,26 @@ class TestTurnoutOnlyElections:
         # Assert
         assert coverage == "turnout_only"
 
+    def test_get_election_coverage_metadata_sentinel(self, db):
+        """get_election_coverage returns 'turnout_only' when only a metadata sentinel is registered."""
+        # Arrange
+        from src.election_analysis_generator.models import Election
+        election = Election(
+            id=None, name="2025 consolidated", year=2025,
+            election_date=date(2025, 4, 1), results_last_updated=None,
+            summary_file=None, category="Consolidated", election_type="midterm",
+            registered_voters=636822, ballots_cast=50000,
+        )
+        inserted = db.insert_election_metadata(election)
+        assert inserted.id is not None
+        db.register_file(f"__metadata__{election.name}", inserted.id, file_type="metadata")
+
+        # Act
+        coverage = db.get_election_coverage(inserted.id)
+
+        # Assert
+        assert coverage == "turnout_only"
+
     def test_get_election_coverage_summary(self, db):
         """get_election_coverage returns 'summary' when only summary file loaded."""
         # Arrange
