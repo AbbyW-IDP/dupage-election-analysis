@@ -74,8 +74,8 @@ def make_candidates_df(rows: list[dict]) -> pd.DataFrame:
 def make_elections_config(path: Path, filename: str = "2026-general.csv") -> None:
     """Write a minimal elections.csv with enough columns for the name to derive correctly."""
     path.write_text(
-        "name,year,election_date,category,summary_file\n"
-        f"2026 General Primary,2026,2026-04-07,General Primary,{filename}\n"
+        "year,election_date,category,summary_file\n"
+        f"2026,2026-04-07,General Primary,{filename}\n"
     )
 
 
