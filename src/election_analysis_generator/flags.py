@@ -295,7 +295,7 @@ def import_flags(
             db.add_override(raw_name, normalized)
             db.remap_by_raw_name(raw_name, normalized)
             db.register_contest_name(normalized, year)
-            db.resolve_flag(flag_id)
+            db.resolve_flag_by_raw_name(raw_name)
             counts["accepted"] += 1
 
         elif status == "mapped":
@@ -309,7 +309,7 @@ def import_flags(
             db.add_override(raw_name, override_target)
             db.remap_by_raw_name(raw_name, override_target)
             db.register_contest_name(override_target, year)
-            db.resolve_flag(flag_id)
+            db.resolve_flag_by_raw_name(raw_name)
             counts["mapped"] += 1
 
         elif status == "ignored":
@@ -364,7 +364,7 @@ def review_flags(db: ElectionDatabase) -> None:
 
             if choice == "a":
                 db.register_contest_name(norm, year)
-                db.resolve_flag(flag_id)
+                db.resolve_flag_by_raw_name(raw_name)
                 db._conn.commit()
                 print("  ✓ Accepted.\n")
                 break
@@ -397,7 +397,7 @@ def review_flags(db: ElectionDatabase) -> None:
                 note = input(f"  Note (optional, e.g. 'Renamed in {year}'): ").strip()
                 db.add_override(raw_name, canonical, note or None)
                 db.remap_by_raw_name(raw_name, canonical)
-                db.resolve_flag(flag_id)
+                db.resolve_flag_by_raw_name(raw_name)
                 db._conn.commit()
                 print(f"  ✓ Mapped to: {canonical}\n")
                 break

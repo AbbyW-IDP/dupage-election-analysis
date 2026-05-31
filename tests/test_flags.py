@@ -224,6 +224,32 @@ class TestImportFlagsAccepted:
         # Assert
         assert seeded_db.get_unresolved_flags() == []
 
+    def test_accepted_resolves_all_years_for_raw_name(self, seeded_db, tmp_path):
+        """accepted resolves all flags for the raw name, not just the workbook row."""
+        # Arrange: same raw name in two different election years -> two flags
+        raw = "Attorney General, State of Illinois - D*"
+        flag_id_2014 = _seed_flagged(
+            seeded_db, raw, "ATTORNEY GENERAL, STATE OF ILLINOIS",
+            year=2014, election_name="2014 General Primary",
+        )
+        _seed_flagged(
+            seeded_db, raw, "ATTORNEY GENERAL, STATE OF ILLINOIS",
+            year=2016, election_name="2016 General Primary",
+        )
+        # Workbook only includes the 2014 row
+        xlsx = _make_xlsx(tmp_path, [{
+            "flag_id": flag_id_2014,
+            "raw": raw,
+            "normalized_suggestion": "FOR ATTORNEY GENERAL",
+            "status": "accepted",
+        }])
+
+        # Act
+        import_flags(seeded_db, xlsx)
+
+        # Assert: both years resolved, not just the one in the workbook
+        assert seeded_db.get_unresolved_flags() == []
+
     def test_accepted_changed_name_stores_override(self, seeded_db, tmp_path):
         """accepted with a corrected name stores an override for future loads."""
         # Arrange
