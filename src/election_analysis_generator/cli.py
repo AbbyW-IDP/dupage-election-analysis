@@ -70,7 +70,7 @@ def _print_status(db: ElectionDatabase) -> None:
         date_str = f"  ({date_val})" if date_val is not None else ""
         election_id = row["id"]
         if election_id is None:
-            raise AssertionError("election id is None")  # nosec B101
+            raise RuntimeError("election id is None")
         election_id = int(election_id)  # type: ignore[arg-type]
         coverage = db.get_election_coverage(election_id)  
         coverage_labels = {
