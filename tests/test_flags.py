@@ -628,7 +628,7 @@ def test_excel_load_stores_source_tab_in_flags(tmp_path):
         ws.title = "DEM GOVERNOR"
         ws.append([_CONTEST_UNRECOGNIZED])
         ws.append([None, None, _CANDIDATE])
-        ws.append([])
+        ws.append(["Precinct", "Registered Voters", "Early", "Vote by Mail", "Polling", "Provisional", "Total Votes"])
         ws.append(["Addison 001", 1200, 50, 100, 300, 10, 460])
         wb.save(xlsx_path)
 

@@ -597,6 +597,13 @@ class LoadPrecinctDetail(_LoaderBase):
         if len(rows) < 4:
             return None
 
+        # Verify contest-sheet layout: row 2 col 0 must be the "Precinct"
+        # column header. Non-contest sheets ("Registered Voters", "Table of
+        # Contents") will not have this structure and should be silently skipped
+        # rather than flagged as unknown contest names.
+        if not rows[2] or str(rows[2][0] or "").strip().upper() != "PRECINCT":
+            return None
+
         raw_contest = str(rows[0][0] or "").strip()
         if not raw_contest:
             return None
