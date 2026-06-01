@@ -624,6 +624,7 @@ def test_excel_load_stores_source_tab_in_flags(tmp_path):
         xlsx_path = tmp_path / "detail.xlsx"
         wb = openpyxl.Workbook()
         ws = wb.active
+        assert ws is not None
         ws.title = "DEM GOVERNOR"
         ws.append([_CONTEST_UNRECOGNIZED])
         ws.append([None, None, _CANDIDATE])
