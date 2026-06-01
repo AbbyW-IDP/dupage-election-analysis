@@ -345,7 +345,6 @@ def review_flags(db: ElectionDatabase) -> None:
     print(f"{len(flags)} unresolved flag(s).\n")
 
     for flag in flags:
-        flag_id = flag["id"]
         year = flag["year"]
         raw_name = flag["contest_name_raw"]
         norm = flag["contest_name"]
